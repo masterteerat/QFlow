@@ -87,6 +87,8 @@ CREATE TABLE Ticket (
     timeslot_id INT REFERENCES Time_Slot(timeslot_id),
     customer_id INT REFERENCES Customer(customer_id) ON DELETE CASCADE,
     status_id INT REFERENCES Ticket_Status(status_id)
+
+    FOREIGN KEY (customer_id) REFERENCES Customer(customer_id)  
 );
 
 CREATE TABLE Payment (
