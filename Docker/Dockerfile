@@ -1,18 +1,29 @@
-# Use an official runtime as a parent image
-FROM node:18-alpine
+# --- Stage 1: Build the React Frontend ---
+FROM node:20-alpine AS frontend-builder
+WORKDIR /usr/src/frontend
 
-# Set the working directory
-WORKDIR /usr/src/app
-
-# Copy package files and install dependencies
-COPY package*.json ./
+# Install frontend dependencies
+COPY App/frontend/package*.json ./
 RUN npm install
 
-# Copy the rest of your application code
-COPY . .
+# Copy frontend source and build it
+COPY App/frontend/ .
+RUN npm run build
 
-# Expose the port your app runs on
+# --- Stage 2: Setup the Express Backend ---
+FROM node:20-alpine
+WORKDIR /usr/src/app
+
+# Install backend dependencies
+COPY App/backend/package*.json ./
+RUN npm install
+
+# Copy backend code
+COPY App/backend/ .
+
+# Grab the compiled React files from Stage 1 and put them in the backend's 'public' folder
+COPY --from=frontend-builder /usr/src/frontend/dist ./public
+
+# Expose the port and start the server
 EXPOSE 3000
-
-# Start the application
 CMD ["npm", "start"]

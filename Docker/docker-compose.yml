@@ -10,10 +10,13 @@ services:
       - "5432:5432"
     volumes:
 
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../SQL/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ../SQL/Data.sql:/docker-entrypoint-initdb.d/02_Data.sql
 
   app:
-    build: .
+    build:
+        context: ..
+        dockerfile: Docker/Dockerfile
     ports:
       - "3000:3000"
     depends_on:
