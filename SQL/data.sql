@@ -28,15 +28,16 @@ INSERT INTO Subscription_Status (substatus_name) VALUES
 ('Suspended');
 
 -- 5. Owners
-INSERT INTO Owner (fname, lname, phone_number, email) VALUES 
-('John', 'Smith', '081-234-5678', 'john.smith@gmail.com'),
-('Sarah', 'Connor', '089-876-5432', 'sarah.c@clinic.com');
+-- 5. Owners
+INSERT INTO Owner (fname, lname, phone_number, email, password) VALUES 
+('John', 'Smith', '081-234-5678', 'john.smith@gmail.com', 'ownerpass123'),
+('Sarah', 'Connor', '089-876-5432', 'sarah.c@clinic.com', 'sarahSecure');
 
 -- 6. Customers
-INSERT INTO Customer (fname, lname, phone_number, email) VALUES 
-('Alex', 'Mercer', '086-111-2222', 'alex.m@hotmail.com'),
-('Emma', 'Watson', '087-333-4444', 'emma.w@gmail.com'),
-('Bruce', 'Wayne', '088-555-6666', 'bruce@waynecorp.com');
+INSERT INTO Customer (fname, lname, phone_number, email, password) VALUES 
+('Alex', 'Mercer', '086-111-2222', 'alex.m@hotmail.com', 'test1234'),
+('Emma', 'Watson', '087-333-4444', 'emma.w@gmail.com', 'emmaPass!'),
+('Bruce', 'Wayne', '088-555-6666', 'bruce@waynecorp.com', 'batman99');
 
 
 -- =========================================================

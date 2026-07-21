@@ -5,7 +5,8 @@ CREATE TABLE Customer (
     fname         VARCHAR(100) NOT NULL,
     lname         VARCHAR(100) NOT NULL,
     phone_number  VARCHAR(20),
-    email         VARCHAR(255) UNIQUE NOT NULL
+    email         VARCHAR(255) UNIQUE NOT NULL,
+    password      VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE Owner (
@@ -13,7 +14,8 @@ CREATE TABLE Owner (
     fname         VARCHAR(100) NOT NULL,
     lname         VARCHAR(100) NOT NULL,
     phone_number  VARCHAR(20),
-    email         VARCHAR(100) UNIQUE NOT NULL
+    email         VARCHAR(100) UNIQUE NOT NULL,
+    password      VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE Ticket_Status (
@@ -86,9 +88,7 @@ CREATE TABLE Ticket (
     queue_id INT REFERENCES Queue(queue_id) ON DELETE CASCADE,
     timeslot_id INT REFERENCES Time_Slot(timeslot_id),
     customer_id INT REFERENCES Customer(customer_id) ON DELETE CASCADE,
-    status_id INT REFERENCES Ticket_Status(status_id)
-
-    FOREIGN KEY (customer_id) REFERENCES Customer(customer_id)  
+    status_id INT REFERENCES Ticket_Status(status_id)  
 );
 
 CREATE TABLE Payment (
