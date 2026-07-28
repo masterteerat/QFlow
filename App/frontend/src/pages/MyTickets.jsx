@@ -1,218 +1,138 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from '../lib/api';
+import { getCustomer } from '../lib/auth';
 
-// สถานะที่ถือว่า "กำลังดำเนินอยู่" (Waiting, Serving)
 const ACTIVE_STATUSES = ['Waiting', 'Serving'];
 
 const STATUS_STYLE = {
-  Waiting:   { bg: '#fff3cd', color: '#856404', label: 'รอคิว (ยังไม่ถึงร้าน)' },
-  Serving:   { bg: '#d1e7dd', color: '#0f5132', label: 'ถึงร้านแล้ว' },
-  Cancelled: { bg: '#f8d7da', color: '#842029', label: 'ยกเลิกแล้ว' },
+  Waiting: { bg: 'bg-amber-100', color: 'text-amber-800', label: 'Waiting' },
+  Serving: { bg: 'bg-emerald-100', color: 'text-emerald-800', label: 'Checked in' },
+  Cancelled: { bg: 'bg-rose-100', color: 'text-rose-800', label: 'Cancelled' }
 };
 
 export default function MyTickets() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [filter, setFilter] = useState('active'); // 'active' | 'all'
-
-  // ดึง customer id จาก localStorage (เซฟไว้ตอน login)
-  const getCustomerId = () => {
-    try {
-      const storedUser = JSON.parse(localStorage.getItem('customer_user'));
-      return storedUser?.id || null;
-    } catch {
-      return null;
-    }
-  };
+  const [filter, setFilter] = useState('active');
 
   const fetchTickets = useCallback(async () => {
-    const customerId = getCustomerId();
-    if (!customerId) {
-      setErrorMsg('ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
+    const customer = getCustomer();
+    if (!customer?.id) {
+      setErrorMsg('Please log in again.');
       setLoading(false);
       return;
     }
 
     try {
-      const response = await fetch(`http://localhost:3000/api/customer/tickets/${customerId}`);
-      const data = await response.json();
+      const data = await api.get(`/customer/tickets/${customer.id}`);
       if (data.success) {
         setTickets(data.data);
         setErrorMsg('');
       } else {
-        setErrorMsg(data.message || 'ไม่สามารถโหลดข้อมูลคิวได้');
+        setErrorMsg(data.message || 'Could not load your tickets.');
       }
     } catch (error) {
       console.error('Fetch tickets error:', error);
-      setErrorMsg('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+      setErrorMsg('Could not reach the server.');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // 🟢 ฟังก์ชันจัดการการยกเลิกคิว
-  const handleCancelTicket = async (ticketId) => {
-    const customerId = getCustomerId();
-    if (!customerId) {
-      alert('กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
-      return;
-    }
-
-    // ถามยืนยันก่อนกดเพื่อป้องกันลูกค้ามือลั่น
-    if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการยกเลิกคิวนี้? (ช่วงเวลาที่จองจะถูกปล่อยว่างทันที)')) {
-      return;
-    }
+  const handleCancel = async (ticketId) => {
+    const customer = getCustomer();
+    if (!customer?.id) return alert('Please log in again.');
+    if (!window.confirm('Cancel this ticket? Your slot will be released right away.')) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/customer/tickets/${ticketId}/cancel`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer_id: customerId })
-      });
-
-      const result = await response.json();
-
+      const result = await api.patch(`/customer/tickets/${ticketId}/cancel`, { customer_id: customer.id });
       if (result.success) {
-        alert('ยกเลิกคิวเรียบร้อยแล้วครับ');
-        fetchTickets(); // รีเฟรชข้อมูลคิวใหม่ทันที
+        fetchTickets();
       } else {
-        alert(`ไม่สามารถยกเลิกได้: ${result.message}`);
+        alert(result.message);
       }
     } catch (error) {
       console.error('Cancel ticket error:', error);
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อระบบ');
+      alert('Could not reach the server.');
     }
   };
 
   useEffect(() => {
     fetchTickets();
-    // รีเฟรชอัตโนมัติทุก 15 วิ เพื่อให้เห็นสถานะคิวอัปเดตแบบใกล้เคียง real-time
-    const interval = setInterval(fetchTickets, 15000);
+    const interval = setInterval(fetchTickets, 15000); // near-live status updates
     return () => clearInterval(interval);
   }, [fetchTickets]);
 
-  const displayedTickets = tickets.filter((t) =>
-    filter === 'active' ? ACTIVE_STATUSES.includes(t.status_name) : true
-  );
+  const visibleTickets = tickets.filter((t) => (filter === 'active' ? ACTIVE_STATUSES.includes(t.status_name) : true));
 
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ margin: 0 }}>ติดตามคิวของฉัน</h2>
-        <Link to="/customer-home" style={{ color: '#007bff', textDecoration: 'none', fontSize: '0.9rem' }}>
-          ← กลับหน้าหลัก
-        </Link>
+    <div className="max-w-2xl mx-auto p-5">
+      <div className="flex justify-between items-center mb-5">
+        <h2 className="text-2xl font-bold text-slate-800">My tickets</h2>
+        <Link to="/customer-home" className="text-teal-700 text-sm hover:underline">← Back home</Link>
       </div>
 
-      {/* Tabs กรองสถานะ */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <div className="flex gap-2 mb-5">
         <button
           onClick={() => setFilter('active')}
-          style={{
-            padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
-            backgroundColor: filter === 'active' ? '#007bff' : '#e9ecef',
-            color: filter === 'active' ? '#fff' : '#333', fontWeight: 'bold', fontSize: '0.9rem'
-          }}
+          className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${
+            filter === 'active' ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600'
+          }`}
         >
-          กำลังดำเนินอยู่
+          Active
         </button>
         <button
           onClick={() => setFilter('all')}
-          style={{
-            padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
-            backgroundColor: filter === 'all' ? '#007bff' : '#e9ecef',
-            color: filter === 'all' ? '#fff' : '#333', fontWeight: 'bold', fontSize: '0.9rem'
-          }}
+          className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${
+            filter === 'all' ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600'
+          }`}
         >
-          ทั้งหมด
+          All
         </button>
-        <button
-          onClick={fetchTickets}
-          style={{
-            marginLeft: 'auto', padding: '8px 16px', borderRadius: '20px',
-            border: '1px solid #ccc', backgroundColor: '#fff', cursor: 'pointer', fontSize: '0.9rem'
-          }}
-        >
-          🔄 รีเฟรช
+        <button onClick={fetchTickets} className="ml-auto px-4 py-2 rounded-full text-sm border border-slate-300 bg-white hover:bg-slate-50 transition-colors">
+          Refresh
         </button>
       </div>
 
-      {loading && <p style={{ textAlign: 'center', color: '#888' }}>กำลังโหลดข้อมูลคิว...</p>}
+      {loading && <p className="text-center text-slate-400">Loading...</p>}
 
-      {!loading && errorMsg && (
-        <div style={{ backgroundColor: '#f8d7da', color: '#842029', padding: '12px', borderRadius: '8px' }}>
-          {errorMsg}
-        </div>
-      )}
+      {!loading && errorMsg && <div className="bg-rose-50 text-rose-700 p-3 rounded-lg">{errorMsg}</div>}
 
-      {!loading && !errorMsg && displayedTickets.length === 0 && (
-        <p style={{ textAlign: 'center', color: '#888', marginTop: '40px' }}>
-          {filter === 'active' ? 'ไม่มีคิวที่กำลังดำเนินอยู่ในขณะนี้' : 'ยังไม่มีประวัติการจองคิว'}
+      {!loading && !errorMsg && visibleTickets.length === 0 && (
+        <p className="text-center text-slate-400 mt-10">
+          {filter === 'active' ? 'No active tickets right now.' : "You haven't booked anything yet."}
         </p>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        {displayedTickets.map((ticket) => {
-          const style = STATUS_STYLE[ticket.status_name] || { bg: '#e9ecef', color: '#333', label: ticket.status_name };
+      <div className="flex flex-col gap-4">
+        {visibleTickets.map((t) => {
+          const style = STATUS_STYLE[t.status_name] || { bg: 'bg-slate-100', color: 'text-slate-700', label: t.status_name };
           return (
-            <div
-              key={ticket.ticket_id}
-              style={{
-                border: '1px solid #ddd', borderRadius: '10px', padding: '18px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.05)', display: 'flex',
-                justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap'
-              }}
-            >
+            <div key={t.ticket_id} className="border border-slate-200 rounded-lg p-5 bg-white shadow-sm flex justify-between items-center gap-3 flex-wrap">
               <div>
-                <h3 style={{ margin: '0 0 6px 0' }}>{ticket.business_name}</h3>
-                <p style={{ margin: '2px 0', color: '#555', fontSize: '0.9rem' }}>
-                  วันที่: {ticket.date}
+                <h3 className="font-bold text-slate-800">{t.business_name}</h3>
+                <p className="text-slate-500 text-sm mt-1">Date: {t.date}</p>
+                <p className="text-slate-500 text-sm">
+                  Time: {t.start_time === '-' ? 'Walk-in (no set time)' : `${t.start_time.slice(0, 5)} - ${t.end_time.slice(0, 5)}`}
                 </p>
-                <p style={{ margin: '2px 0', color: '#555', fontSize: '0.9rem' }}>
-                  เวลา: {ticket.start_time === '-' ? 'Walk-in (ไม่มีเวลานัดหมาย)' : `${ticket.start_time.slice(0, 5)} - ${ticket.end_time.slice(0, 5)} น.`}
-                </p>
-                {Number(ticket.amount_paid) > 0 && (
-                  <p style={{ margin: '2px 0', color: '#555', fontSize: '0.9rem' }}>
-                    ยอดมัดจำที่ชำระ: {ticket.amount_paid} บาท
-                  </p>
-                )}
+                {Number(t.amount_paid) > 0 && <p className="text-slate-500 text-sm">Deposit paid: ฿{t.amount_paid}</p>}
               </div>
 
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#333' }}>
-                  {ticket.queue_number}
-                </div>
-                <span
-                  style={{
-                    display: 'inline-block', marginTop: '4px', padding: '4px 12px',
-                    borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold',
-                    backgroundColor: style.bg, color: style.color
-                  }}
-                >
+              <div className="text-right">
+                <div className="text-3xl font-bold text-slate-800">{t.queue_number}</div>
+                <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-bold ${style.bg} ${style.color}`}>
                   {style.label}
                 </span>
 
-                {/* 🟢 ปุ่มยกเลิกคิว แสดงเฉพาะเมื่อสถานะเป็น Waiting */}
-                {ticket.status_name === 'Waiting' && (
-                  <div style={{ marginTop: '12px' }}>
+                {t.status_name === 'Waiting' && (
+                  <div className="mt-3">
                     <button
-                      onClick={() => handleCancelTicket(ticket.ticket_id)}
-                      style={{
-                        padding: '6px 14px',
-                        backgroundColor: '#dc3545',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem',
-                        fontWeight: 'bold',
-                        transition: 'background-color 0.2s'
-                      }}
-                      onMouseOver={(e) => e.target.style.backgroundColor = '#bb2d3b'}
-                      onMouseOut={(e) => e.target.style.backgroundColor = '#dc3545'}
+                      onClick={() => handleCancel(t.ticket_id)}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-sm font-bold transition-colors"
                     >
-                      ✕ ยกเลิกคิว
+                      Cancel
                     </button>
                   </div>
                 )}

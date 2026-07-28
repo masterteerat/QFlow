@@ -1,4 +1,3 @@
-
 services:
   db:
     image: postgres:17
@@ -9,14 +8,13 @@ services:
     ports:
       - "5432:5432"
     volumes:
-
       - ../SQL/init.sql:/docker-entrypoint-initdb.d/01_init.sql
       - ../SQL/data.sql:/docker-entrypoint-initdb.d/02_data.sql
 
   app:
     build:
-        context: ..
-        dockerfile: Docker/Dockerfile
+      context: ..
+      dockerfile: Docker/Dockerfile
     ports:
       - "3000:3000"
     depends_on:

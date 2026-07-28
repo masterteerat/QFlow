@@ -1,74 +1,76 @@
-# QFlow - Global Queue Management System
+# QFlow
 
-A comprehensive application for managing queues across all shops worldwide.
+A booking app for walk-up businesses (barbers, clinics, cafes, anything with a line).
+Any shop owner can register and open bookings; customers pick a slot (or grab a
+walk-in ticket) and show a QR-style ticket when they arrive.
 
-## Overview
+QFlow only handles the booking step. What happens inside the shop - how staff
+run their day, POS, scheduling staff, etc. - is out of scope on purpose.
 
-QFlow is a centralized queue management system designed to streamline customer queuing experiences across multiple retail locations globally. Provide your customers with efficient wait times and real-time queue status updates.
+## How it works
 
-## Features
+- Owners sign up, register a shop, and choose walk-in or fixed time slots.
+- Customers sign up, pick a shop and a slot, and get a ticket with a queue number.
+- Staff check tickets in from the owner dashboard when the customer arrives.
+- Shops can optionally require a deposit before a booking is confirmed.
 
-- **Multi-location Support**: Manage queues for shops in every corner of the world
-- **Real-time Updates**: Customers can view current queue status online
-- **Scalable Architecture**: Built on Express.js for high performance
-- **Docker Ready**: Easy deployment with Docker and Docker Compose
-- **RESTful API**: Simple and intuitive endpoints
+## Stack
 
-## Tech Stack
+- React (Vite) frontend, Tailwind for styling
+- Express backend, PostgreSQL for storage
+- Docker Compose for local dev
 
-- Node.js
-- Express.js
-- Docker
-- PostgreSQL (database)
+## Running locally
 
-## Installation
+Requires Docker and Docker Compose.
 
-### Prerequisites
-
-- Node.js 16+
-- Docker & Docker Compose
-
-### Setup
-
-1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd QFlow
-```
-
-2. Start the application:
-```bash
+cd Docker
 docker-compose up -d
 ```
 
-3. The server will start on port 3000
+The app is served at `http://localhost:3000`.
 
-## Usage
-
-Visit `http://localhost:3000` to see the queue management interface.
-
-### API Endpoints
-
-- `GET /` - Main endpoint
-- Additional endpoints can be added for queue operations
-
-## Project Structure
+## Project layout
 
 ```
 QFlow/
-├── server.js          # Express application entry point
-├── init.sql           # Database initialization script
-├── Dockerfile         # Container configuration
-├── docker-compose.yml # Docker orchestration
-└── package.json       # Node.js dependencies
+├── App/
+│   ├── backend/          # Express API
+│   │   ├── config/       # DB pool
+│   │   ├── controllers/  # request handlers
+│   │   ├── models/       # SQL queries
+│   │   └── routes/
+│   └── frontend/         # React app
+│       └── src/
+│           ├── components/
+│           ├── lib/      # fetch + auth helpers
+│           └── pages/
+├── SQL/
+│   ├── init.sql          # schema
+│   └── data.sql          # seed data
+└── Docker/
 ```
 
-## Configuration
+## API
 
-Edit `server.js` to customize:
-- Port number
-- API endpoints
-- Queue logic
+All routes are under `/api`.
+
+**Customer**
+- `POST /api/customer/signup`, `POST /api/customer/login`
+- `GET /api/customer/businesses` - list shops with slot availability
+- `POST /api/customer/tickets` - book a slot or take a walk-in ticket
+- `GET /api/customer/tickets/:customerId`
+- `PATCH /api/customer/tickets/:ticketId/cancel`
+
+**Owner**
+- `POST /api/owner/signup`, `POST /api/owner/login`
+- `GET /api/owner/businesses/:ownerId`
+- `POST /api/owner/businesses` - register a new shop
+- `GET /api/owner/queue/:businessId` - today's waiting/serving tickets
+- `PATCH /api/owner/tickets/:ticketId/checkin`
+- `PATCH /api/owner/tickets/:ticketId/complete`
+- `PATCH /api/owner/tickets/:ticketId/no-show`
 
 ## License
 

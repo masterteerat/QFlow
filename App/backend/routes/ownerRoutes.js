@@ -1,15 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const ownerController = require('../controllers/ownerController');
 
-router.post('/signup', ownerController.signup);
-router.post('/login', ownerController.login);
+const auth = require('../controllers/ownerAuthController');
+const business = require('../controllers/businessController');
+const ticket = require('../controllers/ticketController');
 
-router.get('/businesses/:ownerId', ownerController.getMyBusinesses);
-router.get('/queue/:businessId', ownerController.getQueueList);
-router.patch('/tickets/:ticketId/checkin', ownerController.checkInTicket);
-router.patch('/tickets/:ticketId/complete', ownerController.completeTicket);
-router.patch('/tickets/:ticketId/no-show', ownerController.noShowTicket);
-router.post('/businesses', ownerController.createBusiness);
+router.post('/signup', auth.signup);
+router.post('/login', auth.login);
+
+router.get('/businesses/:ownerId', business.getMyBusinesses);
+router.post('/businesses', business.createBusiness);
+
+router.get('/queue/:businessId', ticket.getQueueList);
+router.patch('/tickets/:ticketId/checkin', ticket.checkInTicket);
+router.patch('/tickets/:ticketId/complete', ticket.completeTicket);
+router.patch('/tickets/:ticketId/no-show', ticket.noShowTicket);
 
 module.exports = router;

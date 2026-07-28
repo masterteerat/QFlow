@@ -7,16 +7,14 @@ const ownerRoutes = require('./routes/ownerRoutes');
 
 const app = express();
 
-// Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
-app.use('/api/Customer', customerRoutes);
-app.use('/api/Owner', ownerRoutes);
+app.use('/api/customer', customerRoutes);
+app.use('/api/owner', ownerRoutes);
 
-// Catch-all route for React SPA
+// React Router handles everything else client-side
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

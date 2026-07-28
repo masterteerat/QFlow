@@ -1,12 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const customerController = require('../controllers/customerController');
 
-router.post('/signup', customerController.signup);
-router.post('/login', customerController.login);
-router.get('/businesses', customerController.getBusinesses);
-router.post('/tickets', customerController.createTicket);
-router.get('/tickets/:customerId', customerController.getMyTickets);
-router.patch('/tickets/:ticketId/cancel', customerController.cancelTicket);
+const auth = require('../controllers/customerAuthController');
+const business = require('../controllers/businessController');
+const ticket = require('../controllers/ticketController');
+
+router.post('/signup', auth.signup);
+router.post('/login', auth.login);
+
+router.get('/businesses', business.getBusinesses);
+
+router.post('/tickets', ticket.createTicket);
+router.get('/tickets/:customerId', ticket.getMyTickets);
+router.patch('/tickets/:ticketId/cancel', ticket.cancelTicket);
 
 module.exports = router;
