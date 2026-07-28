@@ -66,15 +66,15 @@ app.post('/api/Owner/login', async (req, res) => {
     );
     
     if (result.rows.length > 0) {
-      const user = result.row[0];
+      const owner = result.rows[0];
 
       res.json({
         success: true,
         message: 'Login succesful',
-        user: {
+        owner: {
           id: owner.owner_id,
           fname: owner.fname,
-          lname: owner.email
+          lname: owner.lname
         }
       });
     } else {
