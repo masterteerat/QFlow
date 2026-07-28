@@ -22,7 +22,7 @@ export default function OwnerLogin() {
 
       if (data.success) {
         if (data.token) localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.owner));
+        localStorage.setItem('owner_user', JSON.stringify(data.owner));
 
         navigate('/owner-home');
       } else {

@@ -255,3 +255,50 @@ exports.getMyTickets = async (req, res) => {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
+
+exports.cancelTicket = async (req, res) => {
+  const { ticketId } = req.params;
+  const { customer_id } = req.body;
+
+  try {
+    const db = require('../config/db');
+
+    // ตรวจสอบว่าตั๋วนี้เป็นของลูกค้าคนนี้จริง ป้องกันคนอื่นยิง API มายกเลิกตั๋วคนอื่น
+    const checkQuery = `
+      SELECT ticket_id, status_id
+      FROM ticket
+      WHERE ticket_id = $1 AND customer_id = $2;
+    `;
+    const checkRes = await db.query(checkQuery, [ticketId, customer_id]);
+
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลการจองนี้' });
+    }
+
+    // อนุญาตให้ยกเลิกได้เฉพาะสถานะ Waiting (status_id = 1) เท่านั้น
+    if (checkRes.rows[0].status_id !== 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'ไม่สามารถยกเลิกคิวนี้ได้ เนื่องจากสถานะไม่ใช่ "กำลังรอคิว"'
+      });
+    }
+
+    // status_id = 4 คือ Cancelled
+    const updateQuery = `
+      UPDATE ticket
+      SET status_id = 4
+      WHERE ticket_id = $1
+      RETURNING *;
+    `;
+    const updateRes = await db.query(updateQuery, [ticketId]);
+
+    res.json({
+      success: true,
+      message: 'ยกเลิกคิวสำเร็จ',
+      data: updateRes.rows[0]
+    });
+  } catch (error) {
+    console.error('Cancel Ticket Error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};

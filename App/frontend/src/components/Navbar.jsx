@@ -4,10 +4,11 @@ export default function Navbar({ userName }) {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/');
-  };
+  localStorage.removeItem('token');
+  localStorage.removeItem('customer_user');
+  localStorage.removeItem('owner_user');
+  navigate('/');
+};
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200 px-8 py-4 flex justify-between items-center">

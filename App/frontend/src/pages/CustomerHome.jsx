@@ -30,7 +30,7 @@ export default function CustomerHome() {
   // ดึง customer id ของผู้ใช้ที่ล็อกอินอยู่จริง (เซฟไว้ตอน login) แทนการ hardcode
   const getCustomerId = () => {
     try {
-      const storedUser = JSON.parse(localStorage.getItem('user'));
+      const storedUser = JSON.parse(localStorage.getItem('customer_user'));
       return storedUser?.id || null;
     } catch {
       return null;

@@ -5,9 +5,8 @@ import { Link } from 'react-router-dom';
 const ACTIVE_STATUSES = ['Waiting', 'Serving'];
 
 const STATUS_STYLE = {
-  Waiting:   { bg: '#fff3cd', color: '#856404', label: 'กำลังรอคิว' },
-  Serving:   { bg: '#cfe2ff', color: '#084298', label: 'กำลังให้บริการ' },
-  Completed: { bg: '#d1e7dd', color: '#0f5132', label: 'เสร็จสิ้น' },
+  Waiting:   { bg: '#fff3cd', color: '#856404', label: 'รอคิว (ยังไม่ถึงร้าน)' },
+  Serving:   { bg: '#d1e7dd', color: '#0f5132', label: 'ถึงร้านแล้ว' },
   Cancelled: { bg: '#f8d7da', color: '#842029', label: 'ยกเลิกแล้ว' },
 };
 
@@ -20,7 +19,7 @@ export default function MyTickets() {
   // ดึง customer id จาก localStorage (เซฟไว้ตอน login)
   const getCustomerId = () => {
     try {
-      const storedUser = JSON.parse(localStorage.getItem('user'));
+      const storedUser = JSON.parse(localStorage.getItem('customer_user'));
       return storedUser?.id || null;
     } catch {
       return null;
@@ -51,6 +50,40 @@ export default function MyTickets() {
       setLoading(false);
     }
   }, []);
+
+  // 🟢 ฟังก์ชันจัดการการยกเลิกคิว
+  const handleCancelTicket = async (ticketId) => {
+    const customerId = getCustomerId();
+    if (!customerId) {
+      alert('กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
+      return;
+    }
+
+    // ถามยืนยันก่อนกดเพื่อป้องกันลูกค้ามือลั่น
+    if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการยกเลิกคิวนี้? (ช่วงเวลาที่จองจะถูกปล่อยว่างทันที)')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3000/api/customer/tickets/${ticketId}/cancel`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_id: customerId })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('ยกเลิกคิวเรียบร้อยแล้วครับ');
+        fetchTickets(); // รีเฟรชข้อมูลคิวใหม่ทันที
+      } else {
+        alert(`ไม่สามารถยกเลิกได้: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Cancel ticket error:', error);
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อระบบ');
+    }
+  };
 
   useEffect(() => {
     fetchTickets();
@@ -159,6 +192,30 @@ export default function MyTickets() {
                 >
                   {style.label}
                 </span>
+
+                {/* 🟢 ปุ่มยกเลิกคิว แสดงเฉพาะเมื่อสถานะเป็น Waiting */}
+                {ticket.status_name === 'Waiting' && (
+                  <div style={{ marginTop: '12px' }}>
+                    <button
+                      onClick={() => handleCancelTicket(ticket.ticket_id)}
+                      style={{
+                        padding: '6px 14px',
+                        backgroundColor: '#dc3545',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        fontWeight: 'bold',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#bb2d3b'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#dc3545'}
+                    >
+                      ✕ ยกเลิกคิว
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
