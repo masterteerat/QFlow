@@ -66,7 +66,8 @@ CREATE TABLE Subscription_Payment (
 CREATE TABLE Queue (
     queue_id SERIAL PRIMARY KEY,
     date DATE NOT NULL,
-    business_id INT REFERENCES Business(business_id) ON DELETE CASCADE
+    business_id INT REFERENCES Business(business_id) ON DELETE CASCADE,
+    CONSTRAINT uq_queue_date_business UNIQUE (date, business_id)
 );
 
 CREATE TABLE Time_Slot (
@@ -82,10 +83,12 @@ CREATE TABLE Time_Slot (
 
 CREATE TABLE Ticket (
     ticket_id SERIAL PRIMARY KEY,
+    queue_number VARCHAR(20) NOT NULL,
     queue_id INT REFERENCES Queue(queue_id) ON DELETE CASCADE,
     timeslot_id INT REFERENCES Time_Slot(timeslot_id),
     customer_id INT REFERENCES Customer(customer_id) ON DELETE CASCADE,
-    status_id INT REFERENCES Ticket_Status(status_id)  
+    status_id INT DEFAULT 1 REFERENCES Ticket_Status(status_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE Payment (

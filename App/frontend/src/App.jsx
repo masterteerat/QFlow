@@ -6,6 +6,7 @@ import CustomerSignUp from './pages/CustomerSignUp';
 import OwnerSignUp from './pages/OwnerSignUp';
 import CustomerHome from './pages/CustomerHome';
 import OwnerHome from './pages/OwnerHome';
+import MyTickets from './pages/MyTickets';
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         {/* Dashboard/Home Routes */}
         <Route path="/customer-home" element={<CustomerHome />} />
         <Route path="/owner-home" element={<OwnerHome />} />
+        <Route path="/my-tickets" element={<MyTickets />} />
       </Routes>
     </BrowserRouter>
   );
