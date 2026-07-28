@@ -8,7 +8,7 @@ export default function CustomerLogin(){
     const navigate = useNavigate();
 
     const handleLogin = async (e) => {
-        e.preventDefualt();
+        e.preventDefault();
         setErrorMessage('');
 
         const userCredential = {
@@ -21,14 +21,14 @@ export default function CustomerLogin(){
         try{
             const response = await fetch('http://localhost:3000/api/Customer/login', {
                 method: 'POST',
-                method: { 'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json'},
                 body: JSON.stringify(userCredential)
             });
 
             const data = await response.json();
             
             if(data.success) {
-                navigate('/Customer-home')
+                navigate('/customer-home')
             } else {
                 setErrorMessage(data.message);
             }

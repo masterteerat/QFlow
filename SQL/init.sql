@@ -1,4 +1,3 @@
--- No Foreign Key
 
 CREATE TABLE Customer (
     customer_id   SERIAL PRIMARY KEY,
@@ -40,8 +39,6 @@ CREATE TABLE Subscription_Status (
     substatus_id    SERIAL PRIMARY KEY,
     substatus_name  VARCHAR(20) UNIQUE NOT NULL
 );
-
--- Relation
 
 CREATE TABLE Business (
     business_id SERIAL PRIMARY KEY,

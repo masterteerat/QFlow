@@ -23,6 +23,23 @@ export default function CustomerSignUp() {
     // Ready to be sent to your future /api/customer/signup route
     console.log("Customer Registration Data:", formData);
     
+    try {
+      const response = await fetch('http://localhost:3000/api/Customer/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json'},
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+      
+      if(data.success){
+        navigate('/')
+      } else {
+        setErrorMessage(data.errorMessage)
+      }
+    } catch(error){
+        setErrorMessage("Could not connect to the server.")
+    }
     // Placeholder for actual fetch logic
     // ...
   };

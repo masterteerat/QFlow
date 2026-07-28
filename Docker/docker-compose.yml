@@ -11,7 +11,7 @@ services:
     volumes:
 
       - ../SQL/init.sql:/docker-entrypoint-initdb.d/01_init.sql
-      - ../SQL/Data.sql:/docker-entrypoint-initdb.d/02_Data.sql
+      - ../SQL/data.sql:/docker-entrypoint-initdb.d/02_Data.sql
 
   app:
     build:

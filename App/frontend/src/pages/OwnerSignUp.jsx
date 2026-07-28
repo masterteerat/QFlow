@@ -23,8 +23,23 @@ export default function OwnerSignUp() {
     // Ready to be sent to your future /api/owner/signup route
     console.log("Owner Registration Data:", formData);
     
-    // Placeholder for actual fetch logic
-    // ...
+      try {
+      const response = await fetch('http://localhost:3000/api/Owner/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json'},
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+      
+      if(data.success){
+        navigate('/owner-login')
+      } else {
+        setErrorMessage(data.errorMessage)
+      }
+    } catch(error){
+        setErrorMessage("Could not connect to the server.")
+    }
   };
 
   return (
