@@ -8,7 +8,7 @@ exports.createTicket = async (req, res) => {
   try {
     // Re-check on the server too, in case two people book the same slot at once
     if (timeslot_id && (await TicketModel.isSlotTaken(timeslot_id))) {
-      return res.status(409).json({ success: false, message: 'This time slot was just booked. Please pick another.' });
+      return res.status(409).json({ success: false, message: 'This time slot was booked. Pick another.' });
     }
 
     const queueId = await TicketModel.findOrCreateTodayQueue(business_id);

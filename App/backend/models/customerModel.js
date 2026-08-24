@@ -14,6 +14,17 @@ const CustomerModel = {
       [fname, lname, phone_number, email, passwordHash]
     );
     return result.rows[0];
+  },
+  findById: async (id) => {
+    const result = await pool.query('SELECT customer_id AS id, fname, lname, phone_number, email FROM customer WHERE customer_id = $1', [id]);
+    return result.rows[0];
+  },
+  update: async (id, { fname, lname, phone_number }) => {
+    const result = await pool.query(
+      `UPDATE customer SET fname = $1, lname = $2, phone_number = $3 WHERE customer_id = $4 RETURNING customer_id AS id, fname, lname, phone_number, email`,
+      [fname, lname, phone_number, id]
+    );
+    return result.rows[0];
   }
 };
 

@@ -38,12 +38,18 @@ CREATE TABLE subscription_status (
     substatus_name VARCHAR(20) UNIQUE NOT NULL
 );
 
+CREATE TABLE category (
+    category_id  SERIAL PRIMARY KEY,
+    name         VARCHAR(100) UNIQUE NOT NULL
+);
+
 CREATE TABLE business (
     business_id    SERIAL PRIMARY KEY,
     business_name  VARCHAR(200) NOT NULL,
     is_deposit     BOOLEAN DEFAULT FALSE,
     deposit_amount NUMERIC(10, 2) DEFAULT 0.00,
-    owner_id       INT REFERENCES owner(owner_id) ON DELETE CASCADE
+    owner_id       INT REFERENCES owner(owner_id) ON DELETE CASCADE,
+    category_id    INT REFERENCES category(category_id)
 );
 
 CREATE TABLE subscription (

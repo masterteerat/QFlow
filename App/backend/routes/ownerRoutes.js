@@ -16,4 +16,9 @@ router.patch('/tickets/:ticketId/checkin', ticket.checkInTicket);
 router.patch('/tickets/:ticketId/complete', ticket.completeTicket);
 router.patch('/tickets/:ticketId/no-show', ticket.noShowTicket);
 
+router.get('/profile/:id', auth.getProfile);
+router.put('/profile/:id', auth.updateProfile);
+
+router.post('/google-login', auth.googleLogin);
+
 module.exports = router;

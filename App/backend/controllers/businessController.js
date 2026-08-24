@@ -12,6 +12,16 @@ exports.getBusinesses = async (req, res) => {
   }
 };
 
+exports.getCategories = async (req, res) => {
+  try {
+    const categories = await BusinessModel.findAllCategories();
+    res.json({ success: true, data: categories });
+  } catch (error) {
+    console.error('Get categories error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 // GET /api/owner/businesses/:ownerId
 exports.getMyBusinesses = async (req, res) => {
   try {
@@ -42,7 +52,7 @@ function validateNewBusiness({ business_name, is_deposit, deposit_amount, queue_
 
 // POST /api/owner/businesses
 exports.createBusiness = async (req, res) => {
-  const { owner_id, business_name, is_deposit, deposit_amount, queue_type, time_slots = [] } = req.body;
+  const { owner_id, business_name, is_deposit, deposit_amount, queue_type, time_slots = [], category_id } = req.body;
 
   if (!owner_id) {
     return res.status(401).json({ success: false, message: 'Please log in again.' });
@@ -61,7 +71,8 @@ exports.createBusiness = async (req, res) => {
       business_name: business_name.trim(),
       is_deposit: !!is_deposit,
       deposit_amount: is_deposit ? Number(deposit_amount) : 0,
-      owner_id
+      owner_id,
+      category_id
     });
 
     let insertedSlots = [];

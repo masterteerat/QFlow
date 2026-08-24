@@ -14,6 +14,18 @@ const OwnerModel = {
       [fname, lname, phone_number, email, passwordHash]
     );
     return result.rows[0];
+  },
+  findById: async (id) => {
+    const result = await pool.query('SELECT owner_id AS id, fname, lname, phone_number, email FROM owner WHERE owner_id = $1', [id]);
+    return result.rows[0];
+  },
+  
+  update: async (id, { fname, lname, phone_number }) => {
+    const result = await pool.query(
+      `UPDATE owner SET fname = $1, lname = $2, phone_number = $3 WHERE owner_id = $4 RETURNING owner_id AS id, fname, lname, phone_number, email`,
+      [fname, lname, phone_number, id]
+    );
+    return result.rows[0];
   }
 };
 
