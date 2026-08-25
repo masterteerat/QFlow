@@ -2,8 +2,8 @@ const pool = require('../config/db');
 
 const BusinessModel = {
   // Public list for customers, with each slot flagged as booked or free.
-  findAllWithSlots: async () => {
-    const query = `
+findAllWithSlots: async ({ search, categoryIds } = {}) => {
+    let query = `
       SELECT
         b.business_id,
         b.business_name,
@@ -36,10 +36,29 @@ const BusinessModel = {
         WHERE timeslot_id IS NOT NULL AND status_id <> 4
         GROUP BY timeslot_id
       ) booked ON booked.timeslot_id = ts.timeslot_id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+
+    // เพิ่มเงื่อนไขกรอง Category (รับเป็น Array)
+    if (categoryIds && categoryIds.length > 0) {
+      params.push(categoryIds);
+      query += ` AND b.category_id = ANY($${params.length}::int[])`;
+    }
+
+    // เพิ่มเงื่อนไขค้นหาชื่อร้าน
+    if (search) {
+      params.push(`%${search}%`);
+      query += ` AND b.business_name ILIKE $${params.length}`;
+    }
+
+    query += `
       GROUP BY b.business_id, c.category_id, c.name
       ORDER BY b.business_id ASC;
     `;
-    const result = await pool.query(query);
+
+    const result = await pool.query(query, params);
     return result.rows;
   },
 

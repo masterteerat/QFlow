@@ -4,7 +4,20 @@ const BusinessModel = require('../models/businessModel');
 // GET /api/customer/businesses
 exports.getBusinesses = async (req, res) => {
   try {
-    const businesses = await BusinessModel.findAllWithSlots();
+    const { search, categories } = req.query;
+
+    // แปลง categories ที่ส่งมาจาก Query String ให้กลายเป็น Array ของตัวเลข
+    let categoryIds = [];
+    if (categories) {
+      if (Array.isArray(categories)) {
+        categoryIds = categories.map(Number);
+      } else if (typeof categories === 'string') {
+        categoryIds = categories.split(',').map(Number).filter(Boolean);
+      }
+    }
+
+    // ส่งค่า filter ไปยัง Model
+    const businesses = await BusinessModel.findAllWithSlots({ search, categoryIds });
     res.json({ success: true, data: businesses });
   } catch (error) {
     console.error('Get businesses error:', error);

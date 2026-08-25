@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
 
-// Normalize a date value (may come back as "2026-07-28" or a full ISO timestamp) to "YYYY-MM-DD"
+// Normalize a date value to "YYYY-MM-DD"
 const toDateKey = (d) => String(d).slice(0, 10);
 
 // Friendly label for a date chip: Today / Tomorrow / "Wed 27"
@@ -28,23 +28,19 @@ export default function CustomerHome() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlots, setSelectedSlots] = useState({});
-  const [selectedDates, setSelectedDates] = useState({}); // { [businessId]: 'YYYY-MM-DD' }
+  const [selectedDates, setSelectedDates] = useState({});
   const [paxByBusiness, setPaxByBusiness] = useState({});
 
   // States สำหรับ Search และ Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [queueTypeFilter, setQueueTypeFilter] = useState('all'); 
   const [depositFilter, setDepositFilter] = useState('all'); 
-  const [categoryFilter, setCategoryFilter] = useState('all'); 
+  const [categoryFilter, setCategoryFilter] = useState([]); // ใช้ Array สำหรับ Multi-select
 
-  // State สำหรับเปิด/ปิด Filter Modal
   const [showFilterModal, setShowFilterModal] = useState(false);
-
   const [paymentModal, setPaymentModal] = useState(null); 
   const [ticket, setTicket] = useState(null); 
-  const [submitting, setSubmitting] = useState(false);
 
-  // ดึงข้อมูลลูกค้าปัจจุบัน
   const customer = getCustomer();
 
   useEffect(() => {
@@ -71,22 +67,31 @@ export default function CustomerHome() {
     }
   };
 
+  // ฟังก์ชัน Toggle เลือก/ยกเลิก หมวดหมู่ (Multi-select)
+  const handleCategoryToggle = (catId) => {
+    setCategoryFilter((prev) =>
+      prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
+    );
+  };
+
   const filteredBusinesses = businesses.filter((b) => {
     const matchesSearch = b.business_name.toLowerCase().includes(searchQuery.toLowerCase());
     const isWalkin = b.time_slots.length === 0;
     const matchesQueueType = queueTypeFilter === 'all' || (queueTypeFilter === 'walkin' && isWalkin) || (queueTypeFilter === 'timeslot' && !isWalkin);
     const matchesDeposit = depositFilter === 'all' || (depositFilter === 'with-deposit' && b.is_deposit) || (depositFilter === 'no-deposit' && !b.is_deposit);
-    const matchesCategory = categoryFilter === 'all' || b.category_id === parseInt(categoryFilter);
+    
+    // กรองตาม Multi-select Category Filter (ถ้าไม่เลือกเลย = แสดงทั้งหมด)
+    const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(b.category_id);
+
     return matchesSearch && matchesQueueType && matchesDeposit && matchesCategory;
   });
 
   const clearAllFilters = () => {
     setQueueTypeFilter('all');
     setDepositFilter('all');
-    setCategoryFilter('all');
+    setCategoryFilter([]); 
   };
 
-  // เปลี่ยนวันที่ที่เลือกดูของร้านนั้น -> เคลียร์ slot ที่เลือกไว้ เพราะเป็นคนละวันแล้ว
   const handleSelectDate = (businessId, dateKey) => {
     setSelectedDates((prev) => ({ ...prev, [businessId]: dateKey }));
     setSelectedSlots((prev) => {
@@ -99,7 +104,6 @@ export default function CustomerHome() {
   const handleSelectSlot = (businessId, slot) => {
     if (slot.is_booked) return;
     setSelectedSlots((prev) => ({ ...prev, [businessId]: slot.timeslot_id }));
-    // ถ้าจำนวนคนที่ตั้งไว้เดิมเกินที่นั่งที่เหลือของ slot นี้ ให้หดลงมาให้พอดีอัตโนมัติ
     setPaxByBusiness((prev) => {
       const current = prev[businessId] || 1;
       const clamped = Math.max(1, Math.min(current, slot.remaining));
@@ -138,7 +142,6 @@ export default function CustomerHome() {
       return;
     }
 
-    setSubmitting(true);
     try {
       const result = await api.post('/customer/tickets', {
         customer_id: customer.id,
@@ -160,8 +163,6 @@ export default function CustomerHome() {
     } catch (error) {
       console.error('Booking error:', error);
       alert('Could not reach the booking service.');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -171,7 +172,6 @@ export default function CustomerHome() {
     fetchBusinesses();
   };
 
-  // สถานะ: กำลังโหลด
   if (loading) return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
       <Navbar userName={customer?.fname} />
@@ -184,7 +184,6 @@ export default function CustomerHome() {
     </div>
   );
 
-  // สถานะ: จองคิวสำเร็จแล้ว (แสดงตั๋ว)
   if (ticket) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
@@ -223,9 +222,8 @@ export default function CustomerHome() {
     );
   }
 
-  const activeFilterCount = (queueTypeFilter !== 'all' ? 1 : 0) + (depositFilter !== 'all' ? 1 : 0) + (categoryFilter !== 'all' ? 1 : 0);
+  const activeFilterCount = (queueTypeFilter !== 'all' ? 1 : 0) + (depositFilter !== 'all' ? 1 : 0) + categoryFilter.length;
 
-  // สถานะ: หน้าหลักแสดงรายการร้านค้า
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
       <Navbar userName={customer?.fname} />
@@ -270,7 +268,7 @@ export default function CustomerHome() {
           </button>
         </div>
 
-        {/* Active Filters Summary (ใต้ Search Bar) */}
+        {/* Active Filters Summary */}
         {(searchQuery || activeFilterCount > 0) && (
           <div className="flex flex-wrap items-center gap-2 mt-3 text-sm">
             <span className="text-slate-500 dark:text-slate-400">Active:</span>
@@ -289,11 +287,15 @@ export default function CustomerHome() {
                 {depositFilter === 'with-deposit' ? 'With deposit' : 'No deposit'} <button onClick={() => setDepositFilter('all')} className="hover:text-rose-600 dark:hover:text-rose-400 text-lg leading-none">&times;</button>
               </span>
             )}
-            {categoryFilter !== 'all' && (
-              <span className="px-3 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-xs font-semibold flex items-center gap-1">
-                {categories.find(c => c.category_id === parseInt(categoryFilter))?.name || 'Category'} <button onClick={() => setCategoryFilter('all')} className="hover:text-rose-600 dark:hover:text-rose-400 text-lg leading-none">&times;</button>
-              </span>
-            )}
+            {/* แสดง Chip ของแต่ละ Category ที่ถูกเลือก */}
+            {categoryFilter.map((catId) => {
+              const catObj = categories.find((c) => c.category_id === catId);
+              return (
+                <span key={catId} className="px-3 py-1 bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300 rounded-full text-xs font-semibold flex items-center gap-1">
+                  {catObj?.name || 'Category'} <button onClick={() => handleCategoryToggle(catId)} className="hover:text-rose-600 dark:hover:text-rose-400 text-lg leading-none">&times;</button>
+                </span>
+              );
+            })}
           </div>
         )}
 
@@ -307,29 +309,32 @@ export default function CustomerHome() {
               </div>
 
               <div className="p-5 overflow-y-auto flex flex-col gap-6">
-                {/* Category Section */}
+                {/* Multi-select Category Section */}
                 <div>
-                  <h4 className="font-bold text-slate-800 dark:text-white mb-3 text-sm uppercase tracking-wider">Category</h4>
+                  <h4 className="font-bold text-slate-800 dark:text-white mb-3 text-sm uppercase tracking-wider">Category (Select Multiple)</h4>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={() => setCategoryFilter('all')}
+                      onClick={() => setCategoryFilter([])}
                       className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
-                        categoryFilter === 'all' ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-teal-400'
+                        categoryFilter.length === 0 ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-teal-400'
                       }`}
                     >
                       All Categories
                     </button>
-                    {categories.map((c) => (
-                      <button
-                        key={c.category_id}
-                        onClick={() => setCategoryFilter(c.category_id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
-                          categoryFilter === c.category_id ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-teal-400'
-                        }`}
-                      >
-                        {c.name}
-                      </button>
-                    ))}
+                    {categories.map((c) => {
+                      const isSelected = categoryFilter.includes(c.category_id);
+                      return (
+                        <button
+                          key={c.category_id}
+                          onClick={() => handleCategoryToggle(c.category_id)}
+                          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
+                            isSelected ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-teal-400'
+                          }`}
+                        >
+                          {c.name} {isSelected && '✓'}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -390,8 +395,6 @@ export default function CustomerHome() {
           <div className="grid gap-5 mt-2">
             {filteredBusinesses.map((b) => {
               const isWalkin = b.time_slots.length === 0;
-
-              // วันที่ทั้งหมดที่มี slot จริง เรียงจากใกล้สุดไปไกลสุด ไม่ซ้ำกัน
               const availableDates = isWalkin
                 ? []
                 : [...new Set(b.time_slots.map((s) => toDateKey(s.date)))].sort();
@@ -403,11 +406,10 @@ export default function CustomerHome() {
 
               const allSlotsBookedForDate = !isWalkin && slotsForDate.length > 0 && slotsForDate.every((s) => s.is_booked);
 
-              // slot ที่กำลังเลือกอยู่ตอนนี้ (ใช้กำหนดเพดานจำนวนคน)
               const selectedSlotObj = !isWalkin
                 ? b.time_slots.find((s) => s.timeslot_id === selectedSlots[b.business_id])
                 : null;
-              const maxPax = selectedSlotObj ? selectedSlotObj.remaining : null; // null = ไม่จำกัด (walk-in)
+              const maxPax = selectedSlotObj ? selectedSlotObj.remaining : null;
               const currentPax = paxByBusiness[b.business_id] || 1;
 
               return (
@@ -428,7 +430,6 @@ export default function CustomerHome() {
 
                   {!isWalkin && (
                     <>
-                      {/* --- Date picker: เลือกวันก่อน แล้วค่อยเลือกเวลาของวันนั้น --- */}
                       <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-5 mb-2">Pick a date</h4>
                       <div className="flex gap-2 flex-wrap">
                         {availableDates.map((dateKey) => {
@@ -546,22 +547,19 @@ export default function CustomerHome() {
                   className="w-full h-full"
                 />
               </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Test QR code - no real payment is made.</p>
 
-              <div className="flex gap-3 mt-5">
+              <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setPaymentModal(null)}
-                  disabled={submitting}
-                  className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  className="flex-1 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => submitBooking(paymentModal.business.business_id, paymentModal.slotId, paymentModal.amount, paymentModal.pax)}
-                  disabled={submitting}
-                  className="flex-1 py-2.5 bg-teal-700 dark:bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors shadow-sm"
+                  className="flex-1 py-2.5 bg-teal-700 dark:bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors"
                 >
-                  {submitting ? 'Saving...' : "I've paid"}
+                  Paid
                 </button>
               </div>
             </div>

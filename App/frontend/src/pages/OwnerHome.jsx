@@ -3,11 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import RegisterBusinessModal from './RegisterBusinessModal';
 import EditScheduleModal from './EditScheduleModal';
+import QRScannerModal from '../components/QRScannerModal'; // Import Component QR
 import { api } from '../lib/api';
 import { getOwner } from '../lib/auth';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-
 
 export default function OwnerHome() {
   const { businessId } = useParams();
@@ -18,8 +17,10 @@ export default function OwnerHome() {
   const [loadingShops, setLoadingShops] = useState(true);
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showEditScheduleModal, setShowEditScheduleModal] = useState(false);
+  const [showScanner, setShowScanner] = useState(false); // State สำหรับกล้องสแกน
 
   const owner = getOwner();
 
@@ -85,6 +86,29 @@ export default function OwnerHome() {
     } catch (error) {
       console.error(`${action} error:`, error);
       alert('Could not reach the server.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // ฟังก์ชันยิง API เมื่อสแกนสำเร็จ
+  const handleScanSuccess = async (qrDataString) => {
+    setShowScanner(false);
+    try {
+      const payload = JSON.parse(qrDataString); // ถอด JSON Payload ออกมา
+      
+      setActionLoadingId(payload.ticketId);
+      const result = await api.patch(`/owner/tickets/${payload.ticketId}/checkin`, payload);
+      
+      if (result.success) {
+        alert(`Check-in for Ticket #${payload.ticketId} Successful!`);
+        fetchQueue(businessId);
+        fetchMyShops();
+      } else {
+        alert(result.message);
+      }
+    } catch (err) {
+      alert('Invalid QR Code format or payload is corrupted.');
     } finally {
       setActionLoadingId(null);
     }
@@ -201,7 +225,19 @@ export default function OwnerHome() {
 
             {loadingQueue && <p className="text-slate-500 dark:text-slate-400 mb-4">Loading queue...</p>}
 
-            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Waiting ({waitingList.length})</h3>
+            {/* ส่วน Waiting List พร้อมปุ่ม Scan QR */}
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-slate-800 dark:text-white">Waiting ({waitingList.length})</h3>
+              
+              <button
+                onClick={() => setShowScanner(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2 text-sm shadow-sm"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                Scan QR to Check-in
+              </button>
+            </div>
+
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
               {waitingList.length === 0 ? (
                 <p className="p-4 text-slate-400 dark:text-slate-500 text-sm">No one is waiting.</p>
@@ -238,7 +274,7 @@ export default function OwnerHome() {
                             disabled={actionLoadingId === t.ticket_id}
                             className="bg-teal-700 text-white hover:bg-teal-800 px-3 py-1 rounded font-medium text-sm transition-colors"
                           >
-                            {actionLoadingId === t.ticket_id ? '...' : 'Scan QR (check in)'}
+                            {actionLoadingId === t.ticket_id ? '...' : 'Manual Check-in'}
                           </button>
                         </td>
                       </tr>
@@ -258,6 +294,7 @@ export default function OwnerHome() {
                     <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm">
                       <th className="p-4 font-semibold">Ticket</th>
                       <th className="p-4 font-semibold">Customer</th>
+                      <th className="p-4 font-semibold text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -265,6 +302,15 @@ export default function OwnerHome() {
                       <tr key={t.ticket_id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
                         <td className="p-4 font-bold text-teal-700 dark:text-teal-400">{t.queue_number}</td>
                         <td className="p-4 font-medium text-slate-800 dark:text-white">{t.fname} {t.lname}</td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => handleAction(t.ticket_id, 'complete')}
+                            disabled={actionLoadingId === t.ticket_id}
+                            className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 px-3 py-1 rounded font-medium text-sm transition-colors"
+                          >
+                            {actionLoadingId === t.ticket_id ? '...' : 'Complete'}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -294,6 +340,14 @@ export default function OwnerHome() {
             setShowEditScheduleModal(false);
             fetchMyShops();
           }}
+        />
+      )}
+
+      {/* เรียกใช้งาน QR Scanner Modal */}
+      {showScanner && (
+        <QRScannerModal 
+          onClose={() => setShowScanner(false)} 
+          onScanSuccess={handleScanSuccess} 
         />
       )}
     </div>

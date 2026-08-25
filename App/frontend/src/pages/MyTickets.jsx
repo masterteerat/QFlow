@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
+import { QRCodeSVG } from 'qrcode.react'; // นำเข้าไลบรารี
 
 const ACTIVE_STATUSES = ['Waiting', 'Serving'];
 
@@ -62,7 +63,7 @@ export default function MyTickets() {
 
   useEffect(() => {
     fetchTickets();
-    const interval = setInterval(fetchTickets, 15000); // near-live status updates
+    const interval = setInterval(fetchTickets, 15000); 
     return () => clearInterval(interval);
   }, [fetchTickets]);
 
@@ -114,33 +115,48 @@ export default function MyTickets() {
           {visibleTickets.map((t) => {
             const style = STATUS_STYLE[t.status_name] || { bg: 'bg-slate-100 dark:bg-slate-700', color: 'text-slate-700 dark:text-slate-300', label: t.status_name };
             return (
-              <div key={t.ticket_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 bg-white dark:bg-slate-800 shadow-sm flex justify-between items-center gap-3 flex-wrap transition-colors duration-300">
-                <div>
-                  <h3 className="font-bold text-slate-800 dark:text-white">{t.business_name}</h3>
+              <div key={t.ticket_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 bg-white dark:bg-slate-800 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-5 transition-colors duration-300">
+                
+                {/* ข้อมูลร้าน */}
+                <div className="w-full sm:w-auto flex-1 text-center sm:text-left">
+                  <h3 className="font-bold text-slate-800 dark:text-white text-lg">{t.business_name}</h3>
                   <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Date: {t.date}</p>
                   <p className="text-slate-500 dark:text-slate-400 text-sm">
                     Time: {t.start_time === '-' ? 'Walk-in (no set time)' : `${t.start_time.slice(0, 5)} - ${t.end_time.slice(0, 5)}`}
                   </p>
-                  {Number(t.amount_paid) > 0 && <p className="text-slate-500 dark:text-slate-400 text-sm">Deposit paid: ฿{t.amount_paid}</p>}
+                  {Number(t.amount_paid) > 0 && <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold text-teal-600 dark:text-teal-400 mt-1">Deposit paid: ฿{t.amount_paid}</p>}
                 </div>
 
-                <div className="text-right">
-                  <div className="text-3xl font-bold text-slate-800 dark:text-white">{t.queue_number}</div>
-                  <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-bold ${style.bg} ${style.color}`}>
+                {/* แสดง QR Code สำหรับตั๋วที่ยัง Waiting */}
+                {t.status_name === 'Waiting' && (
+                  <div className="bg-white p-2 rounded-xl border border-slate-200 shrink-0">
+                    <QRCodeSVG 
+                      value={t.qr_payload || String(t.ticket_id)} 
+                      size={110} 
+                      level="H" 
+                    />
+                  </div>
+                )}
+
+                {/* หมายเลขคิวและปุ่ม Cancel */}
+                <div className="w-full sm:w-auto text-center sm:text-right shrink-0 border-t sm:border-t-0 sm:border-l border-slate-200 dark:border-slate-700 pt-4 sm:pt-0 sm:pl-5">
+                  <div className="text-4xl font-bold text-slate-800 dark:text-white">{t.queue_number}</div>
+                  <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold ${style.bg} ${style.color}`}>
                     {style.label}
                   </span>
 
                   {t.status_name === 'Waiting' && (
-                    <div className="mt-3">
+                    <div className="mt-4">
                       <button
                         onClick={() => handleCancel(t.ticket_id)}
-                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 dark:bg-rose-700 dark:hover:bg-rose-800 text-white rounded-md text-sm font-bold transition-colors"
+                        className="px-4 py-2 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 w-full rounded-md text-sm font-bold transition-colors"
                       >
-                        Cancel
+                        Cancel Ticket
                       </button>
                     </div>
                   )}
                 </div>
+
               </div>
             );
           })}

@@ -1,5 +1,19 @@
+const crypto = require('crypto');
 const TicketModel = require('../models/ticketModel');
 const { STATUS } = TicketModel;
+
+const SECRET_KEY = process.env.QR_SECRET || 'your-secret-key-2026';
+
+// ฟังก์ชันสร้าง HMAC Signature แบบแนบไปใน QR Code
+function generateSignedPayload(ticketId) {
+  const timestamp = Date.now();
+  const signature = crypto
+    .createHmac('sha256', SECRET_KEY)
+    .update(`${ticketId}:${timestamp}`)
+    .digest('hex');
+
+  return JSON.stringify({ ticketId, timestamp, signature });
+}
 
 // POST /api/customer/tickets - book a slot, or take a walk-in ticket
 exports.createTicket = async (req, res) => {
@@ -11,7 +25,6 @@ exports.createTicket = async (req, res) => {
   }
 
   try {
-    // Re-check capacity on the server too, in case two people book at once
     if (timeslot_id) {
       const availability = await TicketModel.getSlotAvailability(timeslot_id);
       if (!availability) {
@@ -69,7 +82,14 @@ exports.getBusinessAnalytics = async (req, res) => {
 exports.getMyTickets = async (req, res) => {
   try {
     const tickets = await TicketModel.findByCustomer(req.params.customerId);
-    res.json({ success: true, data: tickets });
+    
+    // แนบ QR payload เข้าไปในตั๋วแต่ละใบเพื่อให้ Frontend เอาไปเจน QR Code ได้
+    const ticketsWithQR = tickets.map((t) => ({
+      ...t,
+      qr_payload: generateSignedPayload(t.ticket_id),
+    }));
+
+    res.json({ success: true, data: ticketsWithQR });
   } catch (error) {
     console.error('Get my tickets error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
@@ -98,7 +118,7 @@ exports.cancelTicket = async (req, res) => {
   }
 };
 
-// GET /api/owner/queue/:businessId - today's waiting + serving tickets
+// GET /api/owner/queue/:businessId
 exports.getQueueList = async (req, res) => {
   try {
     const tickets = await TicketModel.findActiveForBusiness(req.params.businessId);
@@ -109,7 +129,6 @@ exports.getQueueList = async (req, res) => {
   }
 };
 
-// Shared handler for the three owner-side status transitions below
 async function transition(req, res, { from, to, notFoundMessage }) {
   try {
     const ticket = await TicketModel.transitionStatus(req.params.ticketId, from, to);
@@ -123,15 +142,30 @@ async function transition(req, res, { from, to, notFoundMessage }) {
   }
 }
 
-// PATCH /api/owner/tickets/:ticketId/checkin - customer scanned the QR code
-exports.checkInTicket = (req, res) =>
-  transition(req, res, {
+// PATCH /api/owner/tickets/:ticketId/checkin
+exports.checkInTicket = async (req, res) => {
+  const { timestamp, signature } = req.body;
+  const ticketId = req.params.ticketId;
+
+  // ถ้ามีการสแกน QR Code จะมีข้อมูลนี้ส่งมาเพื่อยืนยัน
+  if (timestamp && signature) {
+    const expectedSignature = crypto
+      .createHmac('sha256', SECRET_KEY)
+      .update(`${ticketId}:${timestamp}`)
+      .digest('hex');
+
+    if (signature !== expectedSignature) {
+      return res.status(400).json({ success: false, message: 'QR Code is invalid or has been forged!' });
+    }
+  }
+
+  return transition(req, res, {
     from: STATUS.WAITING,
     to: STATUS.SERVING,
     notFoundMessage: 'This ticket is not waiting anymore.'
   });
+};
 
-// PATCH /api/owner/tickets/:ticketId/complete
 exports.completeTicket = (req, res) =>
   transition(req, res, {
     from: STATUS.SERVING,
@@ -139,7 +173,6 @@ exports.completeTicket = (req, res) =>
     notFoundMessage: 'This ticket is not being served.'
   });
 
-// PATCH /api/owner/tickets/:ticketId/no-show
 exports.noShowTicket = (req, res) =>
   transition(req, res, {
     from: STATUS.WAITING,
