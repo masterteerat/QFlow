@@ -131,6 +131,44 @@ const TicketModel = {
     return result.rows;
   },
 
+  getBusinessAnalytics: async (businessId) => {
+    // Query 1: The overarching totals
+    const totalsQuery = `
+      SELECT 
+        COUNT(t.ticket_id) AS total_queues,
+        COUNT(t.ticket_id) FILTER (WHERE q.date = CURRENT_DATE) AS queues_today,
+        COUNT(t.ticket_id) FILTER (WHERE q.date >= CURRENT_DATE - INTERVAL '30 days' AND q.date < CURRENT_DATE) AS queues_past_month,
+        COUNT(t.ticket_id) FILTER (WHERE t.status_id = 4) AS total_cancelled
+      FROM business b
+      LEFT JOIN queue q ON q.business_id = b.business_id
+      LEFT JOIN ticket t ON t.queue_id = q.queue_id
+      WHERE b.business_id = $1
+    `;
+
+    // Query 2: The 14-day time-series using generate_series
+    const chartQuery = `
+      SELECT 
+        to_char(series.date, 'Mon DD') AS date_label,
+        COUNT(t.ticket_id) AS count
+      FROM generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, '1 day') AS series(date)
+      LEFT JOIN queue q ON q.date = series.date::date AND q.business_id = $1
+      LEFT JOIN ticket t ON t.queue_id = q.queue_id
+      GROUP BY series.date
+      ORDER BY series.date ASC;
+    `;
+
+    // Execute both queries in parallel
+    const [totalsResult, chartResult] = await Promise.all([
+      pool.query(totalsQuery, [businessId]),
+      pool.query(chartQuery, [businessId])
+    ]);
+
+    return {
+      totals: totalsResult.rows[0] || { total_queues: 0, queues_today: 0, queues_past_month: 0, total_cancelled: 0 },
+      chartData: chartResult.rows
+    };
+  },
+
   // Moves a ticket from one status to another, only if it's currently in fromStatus.
   transitionStatus: async (ticketId, fromStatus, toStatus) => {
     const result = await pool.query(

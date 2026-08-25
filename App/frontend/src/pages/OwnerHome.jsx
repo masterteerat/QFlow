@@ -5,6 +5,9 @@ import RegisterBusinessModal from './RegisterBusinessModal';
 import EditScheduleModal from './EditScheduleModal';
 import { api } from '../lib/api';
 import { getOwner } from '../lib/auth';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+
 
 export default function OwnerHome() {
   const { businessId } = useParams();
@@ -56,6 +59,18 @@ export default function OwnerHome() {
     const interval = setInterval(() => fetchQueue(businessId), 10000);
     return () => clearInterval(interval);
   }, [businessId, fetchQueue]);
+
+  const [analytics, setAnalytics] = useState({ 
+    totals: { total_queues: 0, queues_today: 0, queues_past_month: 0, total_cancelled: 0 },
+    chartData: [] 
+  });
+
+  useEffect(() => {
+    if (!selectedShop) return;
+    api.get(`/owner/analytics/${selectedShop.business_id}`)
+      .then(res => { if (res.success) setAnalytics(res.data); })
+      .catch(err => console.error("Error fetching analytics:", err));
+  }, [selectedShop]);
 
   const handleAction = async (ticketId, action) => {
     setActionLoadingId(ticketId);
@@ -147,6 +162,40 @@ export default function OwnerHome() {
                 >
                   Edit schedule
                 </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <p className="text-sm font-medium text-slate-500">Queues Today</p>
+                <p className="text-3xl font-bold text-teal-700 mt-1">{analytics.totals.queues_today}</p>
+              </div>
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <p className="text-sm font-medium text-slate-500">Past Few Weeks (30d)</p>
+                <p className="text-3xl font-bold text-slate-800 mt-1">{analytics.totals.queues_past_month}</p>
+              </div>
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <p className="text-sm font-medium text-slate-500">Total Queues</p>
+                <p className="text-3xl font-bold text-slate-800 mt-1">{analytics.totals.total_queues}</p>
+              </div>
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <p className="text-sm font-medium text-slate-500">Total Cancelled</p>
+                <p className="text-3xl font-bold text-rose-600 mt-1">{analytics.totals.total_cancelled}</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+              <h3 className="text-lg font-bold text-slate-800 mb-4">14-Day Queue Activity</h3>
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={analytics.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="date_label" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} dy={10} />
+                    <YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                    <Line type="monotone" dataKey="count" name="Total Queues" stroke="#0f766e" strokeWidth={3} dot={{ r: 4, fill: '#0f766e', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#134e4a', strokeWidth: 0 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </div>
 

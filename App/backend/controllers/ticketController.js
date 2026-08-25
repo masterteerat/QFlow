@@ -55,6 +55,16 @@ exports.createTicket = async (req, res) => {
   }
 };
 
+exports.getBusinessAnalytics = async (req, res) => {
+  try {
+    const stats = await TicketModel.getBusinessAnalytics(req.params.businessId);
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    console.error('Get business analytics error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 // GET /api/customer/tickets/:customerId
 exports.getMyTickets = async (req, res) => {
   try {

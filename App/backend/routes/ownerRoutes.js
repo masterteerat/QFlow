@@ -14,6 +14,7 @@ router.get('/businesses/:businessId/schedule', business.getSchedule);
 router.put('/businesses/:businessId/schedule', business.updateSchedule);
 
 router.get('/queue/:businessId', ticket.getQueueList);
+router.get('/analytics/:businessId', ticket.getBusinessAnalytics);
 router.patch('/tickets/:ticketId/checkin', ticket.checkInTicket);
 router.patch('/tickets/:ticketId/complete', ticket.completeTicket);
 router.patch('/tickets/:ticketId/no-show', ticket.noShowTicket);
