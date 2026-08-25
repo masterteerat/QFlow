@@ -343,13 +343,11 @@ export default function OwnerHome() {
         />
       )}
 
-      {/* เรียกใช้งาน QR Scanner Modal */}
-      {showScanner && (
-        <QRScannerModal 
-          onClose={() => setShowScanner(false)} 
-          onScanSuccess={handleScanSuccess} 
-        />
-      )}
+      <QRScannerModal 
+        isOpen={showScanner}
+        onClose={() => setShowScanner(false)}
+        onScanSuccess={handleScanSuccess}
+      />
     </div>
   );
 }
