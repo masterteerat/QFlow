@@ -101,3 +101,15 @@ CREATE TABLE payment (
     status_id  INT REFERENCES payment_status(status_id),
     ticket_id  INT REFERENCES ticket(ticket_id) ON DELETE CASCADE
 );
+
+CREATE TABLE login_otp (
+    otp_id      SERIAL PRIMARY KEY,
+    email       VARCHAR(255) NOT NULL,
+    role        VARCHAR(20) NOT NULL, -- 'customer' or 'owner'
+    otp_code    VARCHAR(6) NOT NULL,
+    expires_at  TIMESTAMP NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_login_otp_email_role ON login_otp(email, role);
+CREATE INDEX idx_login_otp_expires ON login_otp(expires_at);

@@ -186,7 +186,7 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess }) {
                       className="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 disabled:text-slate-300 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-sm font-semibold px-2 py-2"
                       title={timeSlots.length === 1 ? 'At least one slot is required' : 'Remove this slot'}
                     >
-                      ✕
+                      ×
                     </button>
                   </div>
                 ))}

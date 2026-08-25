@@ -6,7 +6,7 @@ exports.getBusinesses = async (req, res) => {
   try {
     const { search, categories } = req.query;
 
-    // แปลง categories ที่ส่งมาจาก Query String ให้กลายเป็น Array ของตัวเลข
+    
     let categoryIds = [];
     if (categories) {
       if (Array.isArray(categories)) {
@@ -16,7 +16,7 @@ exports.getBusinesses = async (req, res) => {
       }
     }
 
-    // ส่งค่า filter ไปยัง Model
+    
     const businesses = await BusinessModel.findAllWithSlots({ search, categoryIds });
     res.json({ success: true, data: businesses });
   } catch (error) {
@@ -46,8 +46,7 @@ exports.getMyBusinesses = async (req, res) => {
   }
 };
 
-// 🟢 แก้: เอาการเช็ค slot.date ออก เพราะระบบเปลี่ยนไปใช้ตารางเวลาประจำวัน (daily template)
-// ที่ stamp ล่วงหน้า 14 วันให้อัตโนมัติใน addTimeSlots() แล้ว ไม่ต้องรับ date จาก client อีกต่อไป
+
 function validateNewBusiness({ business_name, is_deposit, deposit_amount, queue_type, time_slots }) {
   if (!business_name || !business_name.trim()) return 'Please enter a business name.';
   if (is_deposit && (!deposit_amount || Number(deposit_amount) <= 0)) {

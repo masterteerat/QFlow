@@ -1,11 +1,10 @@
 const crypto = require('crypto');
-const pool = require('../config/db'); // เพิ่มการเรียกใช้ database ตรงนี้เพื่อดึงเวลา
+const pool = require('../config/db');
 const TicketModel = require('../models/ticketModel');
 const { STATUS } = TicketModel;
 
 const SECRET_KEY = process.env.QR_SECRET || 'your-secret-key-2026';
 
-// ฟังก์ชันสร้าง HMAC Signature แบบแนบไปใน QR Code
 function generateSignedPayload(ticketId) {
   const timestamp = Date.now();
   const signature = crypto
@@ -27,7 +26,6 @@ exports.createTicket = async (req, res) => {
 
   try {
     if (timeslot_id) {
-      // 1. เช็คว่ามีรอบเวลานี้อยู่จริง และเช็คจำนวนที่ว่าง (Capacity)
       const availability = await TicketModel.getSlotAvailability(timeslot_id);
       if (!availability) {
         return res.status(404).json({ success: false, message: 'Time slot not found.' });
@@ -46,10 +44,6 @@ exports.createTicket = async (req, res) => {
         });
       }
 
-      // ==========================================
-      // 🚀 2. ส่วนที่เพิ่มใหม่: เช็คเวลาทับซ้อน (Overlapping Booking)
-      // ==========================================
-      // 2.1 ดึงเวลาเริ่มและจบของ timeslot ที่ลูกค้าเลือกมาเปรียบเทียบ
       const slotInfo = await pool.query(
         'SELECT start_time, end_time FROM time_slot WHERE timeslot_id = $1',
         [timeslot_id]
@@ -58,7 +52,6 @@ exports.createTicket = async (req, res) => {
       if (slotInfo.rows.length > 0) {
         const { start_time, end_time } = slotInfo.rows[0];
 
-        // 2.2 Query เช็คว่า "ลูกค้ารายนี้" มีการจองคิวในวันเดียวกันที่เวลาทับซ้อนกันหรือไม่
         const overlapQuery = `
           SELECT t.ticket_id
           FROM ticket t
@@ -66,9 +59,9 @@ exports.createTicket = async (req, res) => {
           JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
           WHERE t.customer_id = $1
             AND q.date = $2
-            AND t.status_id NOT IN ($5, $6) -- ยกเว้นคิวที่ถูกยกเลิก (4) หรือเสร็จสิ้นไปแล้ว (3)
-            AND ts.start_time < $4 -- เวลาเริ่มของคิวเดิม < เวลาจบของคิวใหม่
-            AND ts.end_time > $3   -- เวลาจบของคิวเดิม > เวลาเริ่มของคิวใหม่
+            AND t.status_id NOT IN ($5, $6)
+            AND ts.start_time < $4
+            AND ts.end_time > $3
         `;
         const overlapValues = [
           customer_id, 
@@ -81,18 +74,15 @@ exports.createTicket = async (req, res) => {
         
         const { rows: overlapRows } = await pool.query(overlapQuery, overlapValues);
 
-        // ถ้า Query แล้วเจอข้อมูล แปลว่าเวลาทับซ้อน ให้ตีกลับทันที
         if (overlapRows.length > 0) {
           return res.status(409).json({
             success: false,
-            message: 'คุณมีการจองคิวในช่วงเวลานี้อยู่แล้ว (เวลาทับซ้อนกัน) กรุณาเลือกเวลาอื่นครับ'
+            message: 'You already have a booking in this time slot (overlapping). Please choose another time.'
           });
         }
       }
-      // ==========================================
     }
 
-    // 3. ถ้าเวลาไม่ทับซ้อนและมีที่ว่าง ก็ทำการสร้างคิวตามปกติ
     const queueId = await TicketModel.findOrCreateTodayQueue(business_id);
     const queueNumber = await TicketModel.nextQueueNumber(queueId);
 
@@ -131,7 +121,6 @@ exports.getMyTickets = async (req, res) => {
   try {
     const tickets = await TicketModel.findByCustomer(req.params.customerId);
     
-    // แนบ QR payload เข้าไปในตั๋วแต่ละใบเพื่อให้ Frontend เอาไปเจน QR Code ได้
     const ticketsWithQR = tickets.map((t) => ({
       ...t,
       qr_payload: generateSignedPayload(t.ticket_id),
@@ -195,7 +184,6 @@ exports.checkInTicket = async (req, res) => {
   const { timestamp, signature } = req.body;
   const ticketId = req.params.ticketId;
 
-  // ถ้ามีการสแกน QR Code จะมีข้อมูลนี้ส่งมาเพื่อยืนยัน
   if (timestamp && signature) {
     const expectedSignature = crypto
       .createHmac('sha256', SECRET_KEY)

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
+import { useToast } from '../context/ToastContext';
 
 // Normalize a date value to "YYYY-MM-DD"
 const toDateKey = (d) => String(d).slice(0, 10);
@@ -31,7 +32,7 @@ export default function CustomerHome() {
   const [selectedDates, setSelectedDates] = useState({});
   const [paxByBusiness, setPaxByBusiness] = useState({});
 
-  // States สำหรับ Search และ Filters
+  // States for Search and Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [queueTypeFilter, setQueueTypeFilter] = useState('all'); 
   const [depositFilter, setDepositFilter] = useState('all'); 
@@ -42,8 +43,9 @@ export default function CustomerHome() {
   const [ticket, setTicket] = useState(null); 
 
   const customer = getCustomer();
+  const { toast } = useToast();
 
-  // 🚀 คำนวณขอบเขตวันที่ที่อนุญาตให้จอง (วันนี้ ถึง 14 วันข้างหน้า)
+  
   const todayDateObj = new Date();
   todayDateObj.setHours(0, 0, 0, 0);
   
@@ -121,14 +123,14 @@ export default function CustomerHome() {
     const pax = paxByBusiness[business.business_id] || 1;
 
     if (!isWalkin && !slotId) {
-      alert('Please pick a time slot first.');
+      toast.warning('Please pick a time slot first.');
       return;
     }
 
     if (!isWalkin) {
       const slot = business.time_slots.find((s) => s.timeslot_id === slotId);
       if (slot && pax > slot.remaining) {
-        alert(`Only ${slot.remaining} spot${slot.remaining === 1 ? '' : 's'} left in this slot.`);
+        toast.warning(`Only ${slot.remaining} spot${slot.remaining === 1 ? '' : 's'} left in this slot.`);
         return;
       }
     }
@@ -142,7 +144,7 @@ export default function CustomerHome() {
 
   const submitBooking = async (businessId, timeslotId, amountPaid, pax) => {
     if (!customer?.id) {
-      alert('Please log in again.');
+      toast.error('Please log in again.');
       return;
     }
 
@@ -160,13 +162,13 @@ export default function CustomerHome() {
         setTicket(result.data);
         setSelectedSlots({});
       } else {
-        alert(result.message);
+        toast.error(result.message);
         setPaymentModal(null);
         fetchBusinesses(); 
       }
     } catch (error) {
       console.error('Booking error:', error);
-      alert('Could not reach the booking service.');
+      toast.error('Could not reach the booking service.');
     }
   };
 
@@ -347,7 +349,7 @@ export default function CustomerHome() {
                             isSelected ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-teal-400'
                           }`}
                         >
-                          {c.name} {isSelected && '✓'}
+                          {c.name}
                         </button>
                       );
                     })}
@@ -409,7 +411,7 @@ export default function CustomerHome() {
             {filteredBusinesses.map((b) => {
               const isWalkin = b.time_slots.length === 0;
 
-              // 🚀 คัดกรองวันที่เฉพาะ ปัจจุบัน ถึง 14 วันข้างหน้า เท่านั้น
+              
               const availableDates = isWalkin
                 ? []
                 : [...new Set(b.time_slots.map((s) => toDateKey(s.date)))]

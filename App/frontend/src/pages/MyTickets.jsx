@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
 import { QRCodeSVG } from 'qrcode.react';
+import { useToast } from '../context/ToastContext';
 
 const ACTIVE_STATUSES = ['Waiting', 'Serving'];
 
@@ -20,6 +21,7 @@ export default function MyTickets() {
   const [filter, setFilter] = useState('active');
 
   const customer = getCustomer();
+  const { toast } = useToast();
 
   const fetchTickets = useCallback(async () => {
     if (!customer?.id) {
@@ -45,19 +47,20 @@ export default function MyTickets() {
   }, [customer?.id]);
 
   const handleCancel = async (ticketId) => {
-    if (!customer?.id) return alert('Please log in again.');
+    if (!customer?.id) return toast.error('Please log in again.');
     if (!window.confirm('Cancel this ticket? Your slot will be released right away.')) return;
 
     try {
       const result = await api.patch(`/customer/tickets/${ticketId}/cancel`, { customer_id: customer.id });
       if (result.success) {
+        toast.success('Ticket cancelled');
         fetchTickets();
       } else {
-        alert(result.message);
+        toast.error(result.message);
       }
     } catch (error) {
       console.error('Cancel ticket error:', error);
-      alert('Could not reach the server.');
+      toast.error('Could not reach the server.');
     }
   };
 
@@ -117,13 +120,12 @@ export default function MyTickets() {
             return (
               <div key={t.ticket_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 bg-white dark:bg-slate-800 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-5 transition-colors duration-300">
                 
-                {/* ข้อมูลร้าน */}
+                {/* Shop info */}
                 <div className="w-full sm:w-auto flex-1 text-center sm:text-left">
                   <h3 className="font-bold text-slate-800 dark:text-white text-lg">{t.business_name}</h3>
                   
-                  {/* 🚀 โค้ดส่วนที่แยก Walk-in กับ Timeslot ออกจากกัน */}
+                  {/* */}
                   {t.start_time === '-' ? (
-                    // กรณี Walk-in: ดึง t.created_at มาโชว์ (วันที่และเวลาที่กดจอง)
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
                       Booked on: {t.created_at ? new Date(t.created_at).toLocaleString('en-GB', {
                         day: '2-digit', month: '2-digit', year: 'numeric',
@@ -131,7 +133,6 @@ export default function MyTickets() {
                       }) : '-'}
                     </p>
                   ) : (
-                    // กรณี Timeslot: ดึง t.date (วันที่นัดหมาย) กับ start/end time มาโชว์
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
                       Reserved for: {t.date ? new Date(t.date).toLocaleDateString('en-GB') : '-'}
                       {' '}at{' '}
@@ -142,7 +143,7 @@ export default function MyTickets() {
                   {Number(t.amount_paid) > 0 && <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold text-teal-600 dark:text-teal-400 mt-1">Deposit paid: ฿{t.amount_paid}</p>}
                 </div>
 
-                {/* แสดง QR Code สำหรับตั๋วที่ยัง Waiting */}
+                {/* Show QR Code for Waiting tickets */}
                 {t.status_name === 'Waiting' && (
                   <div className="bg-white p-2 rounded-xl border border-slate-200 shrink-0">
                     <QRCodeSVG 
@@ -153,7 +154,7 @@ export default function MyTickets() {
                   </div>
                 )}
 
-                {/* หมายเลขคิวและปุ่ม Cancel */}
+                {/* Queue number and Cancel button */}
                 <div className="w-full sm:w-auto text-center sm:text-right shrink-0 border-t sm:border-t-0 sm:border-l border-slate-200 dark:border-slate-700 pt-4 sm:pt-0 sm:pl-5">
                   <div className="text-4xl font-bold text-slate-800 dark:text-white">{t.queue_number}</div>
                   <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold ${style.bg} ${style.color}`}>

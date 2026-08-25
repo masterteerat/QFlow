@@ -11,6 +11,7 @@ import MyTickets from './pages/MyTickets';
 import CustomerProfile from './pages/CustomerProfile';
 import OwnerProfile from './pages/OwnerProfile';
 import ProtectedRoute from './components/ProtectedRoute';
+import { ToastProvider } from './context/ToastContext';
 
 function DarkModeToggle() {
   const [isDark, setIsDark] = useState(() => {
@@ -47,10 +48,11 @@ function DarkModeToggle() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <DarkModeToggle />
+    <ToastProvider>
+      <BrowserRouter>
+        <DarkModeToggle />
 
-      <Routes>
+        <Routes>
         {/* Customer - public */}
         <Route path="/login" element={<CustomerLogin />} />
         <Route path="/signup" element={<CustomerSignUp />} />
@@ -70,9 +72,10 @@ export default function App() {
         <Route path="/owner/profile" element={<ProtectedRoute role="owner"><OwnerProfile /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
-        {/* path ที่ไม่รู้จักทั้งหมด กันเผื่อ URL มั่ว ให้เด้งกลับหน้า login */}
+        {/* Catch-all for unknown routes - redirect to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
-  );
+  </ToastProvider>
+);
 }

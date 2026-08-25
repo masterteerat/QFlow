@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { GoogleLogin } from '@react-oauth/google';
+import OTPModal from '../components/OTPModal';
 
 export default function OwnerLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showOTP, setShowOTP] = useState(false);
+  const [otpEmail, setOtpEmail] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -17,17 +20,35 @@ export default function OwnerLogin() {
       const data = await api.post('/owner/login', { email, password });
       if (!data.success) return setError(data.message);
 
-      if (data.token) localStorage.setItem('token', data.token);
-      localStorage.setItem('owner_user', JSON.stringify(data.owner));
-      navigate('/owner/dashboard');
+      if (data.requireOTP) {
+        setOtpEmail(data.email);
+        setShowOTP(true);
+      } else if (data.token) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('owner_user', JSON.stringify(data.owner));
+        navigate('/owner/dashboard');
+      }
     } catch {
       setError('Could not connect to the server.');
     }
   };
 
+  const handleVerifyOTP = async (email, otp) => {
+    const data = await api.post('/owner/verify-otp', { email, otp });
+    if (!data.success) throw new Error(data.message);
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('owner_user', JSON.stringify(data.owner));
+    setShowOTP(false);
+    navigate('/owner/dashboard');
+  };
+
+  const handleResendOTP = async (email) => {
+    const data = await api.post('/owner/resend-otp', { email });
+    if (!data.success) throw new Error(data.message);
+  };
+
   const handleQuickLogin = () => {
     setError('');
-    
     localStorage.setItem('token', 'bypass-test-token');
     localStorage.setItem('owner_user', JSON.stringify({ 
       id: 1, 
@@ -35,7 +56,6 @@ export default function OwnerLogin() {
       lname: 'Doe', 
       email: 'john@example.com' 
     }));
-    
     navigate('/owner/dashboard');
   };
 
@@ -50,9 +70,7 @@ export default function OwnerLogin() {
   };
 
   return (
-    // เปลี่ยนจาก bg-slate-800 เป็น bg-slate-50 (สว่าง) และเพิ่ม dark:bg-slate-900
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors duration-300">
-      {/* เพิ่ม dark:bg-slate-800 ให้ตัวกล่อง */}
       <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-96 transition-colors duration-300">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">QFlow for business</h2>
 
@@ -77,7 +95,7 @@ export default function OwnerLogin() {
             onClick={handleQuickLogin}
             className="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-2 px-4 rounded transition-colors"
           >
-            🚀 Quick Login (Test Owner)
+            Quick Login (Test Owner)
           </button>
           
           <div className="mt-4 flex flex-col items-center gap-3">
@@ -99,6 +117,15 @@ export default function OwnerLogin() {
           <p className="text-slate-600 dark:text-slate-300">New here? <Link to="/owner/signup" className="text-teal-700 dark:text-teal-400 hover:underline">Register your shop</Link></p>
           <p className="text-slate-500 dark:text-slate-400 text-xs mt-4">Just here to book? <Link to="/login" className="text-teal-700 dark:text-teal-400 hover:underline">Customer login</Link></p>
         </div>
+
+        <OTPModal
+          isOpen={showOTP}
+          onClose={() => setShowOTP(false)}
+          onVerify={handleVerifyOTP}
+          email={otpEmail}
+          role="owner"
+          onResend={handleResendOTP}
+        />
       </div>
     </div>
   );

@@ -34,7 +34,6 @@ export default function OwnerSignUp() {
   };
 
   return (
-    // เปลี่ยนจาก bg-slate-800 เป็น bg-slate-50 และเพิ่ม dark:bg-slate-900
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center py-10 transition-colors duration-300">
       <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full max-w-md transition-colors duration-300">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">Register your shop</h2>

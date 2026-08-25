@@ -41,13 +41,13 @@ const BusinessModel = {
     
     const params = [];
 
-    // เพิ่มเงื่อนไขกรอง Category (รับเป็น Array)
+    // Add category filter (accepts array)
     if (categoryIds && categoryIds.length > 0) {
       params.push(categoryIds);
       query += ` AND b.category_id = ANY($${params.length}::int[])`;
     }
 
-    // เพิ่มเงื่อนไขค้นหาชื่อร้าน
+    // Add search filter for shop name
     if (search) {
       params.push(`%${search}%`);
       query += ` AND b.business_name ILIKE $${params.length}`;
@@ -81,8 +81,7 @@ const BusinessModel = {
         COUNT(t.ticket_id) FILTER (WHERE t.status_id = 2) AS serving_count
       FROM business b
       LEFT JOIN category c ON c.category_id = b.category_id
-      -- 🚀 แก้ตรงนี้: ล็อกเป็นวันที่ของประเทศไทย
-      LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
+LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
       LEFT JOIN ticket t ON t.queue_id = q.queue_id
       WHERE b.owner_id = $1
       GROUP BY b.business_id, c.category_id
@@ -105,7 +104,6 @@ const BusinessModel = {
   addTimeSlots: async (client, businessId, slots) => {
     const dates = [];
     
-    // 🚀 แก้ตรงนี้: บังคับให้เริ่มคำนวณวันจากเวลาของประเทศไทย ป้องกัน Node.js อิงเวลา UTC
     const bangkokTimeStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" });
     const baseDate = new Date(bangkokTimeStr);
 
@@ -145,8 +143,7 @@ const BusinessModel = {
     const result = await pool.query(
       `SELECT DISTINCT start_time, end_time, max_capacity
        FROM time_slot
-       -- 🚀 แก้ตรงนี้: ล็อกเป็นวันที่ของประเทศไทย
-       WHERE business_id = $1 AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
+WHERE business_id = $1 AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
        ORDER BY start_time ASC`,
       [businessId]
     );
@@ -157,8 +154,7 @@ const BusinessModel = {
     await client.query(
       `DELETE FROM time_slot
        WHERE business_id = $1
-         -- 🚀 แก้ตรงนี้: ล็อกเป็นวันที่ของประเทศไทย
-         AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
+AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
          AND timeslot_id NOT IN (
            SELECT timeslot_id FROM ticket WHERE timeslot_id IS NOT NULL
          )`,

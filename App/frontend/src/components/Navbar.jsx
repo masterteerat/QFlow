@@ -9,13 +9,11 @@ export default function Navbar({ userName }) {
   const [form, setForm] = useState({ fname: '', lname: '', phone_number: '' });
   const [status, setStatus] = useState({ loading: false, error: '', success: '' });
 
-  // เช็คว่าใครล็อกอินอยู่ (Customer หรือ Owner)
   const customer = getCustomer();
   const owner = getOwner();
   const user = customer || owner;
   const role = customer ? 'customer' : 'owner';
 
-  // ดึงข้อมูลเมื่อเปิด Modal
   useEffect(() => {
     if (showModal && user?.id) {
       setStatus({ loading: true, error: '', success: '' });
@@ -29,7 +27,7 @@ export default function Navbar({ userName }) {
     }
   }, [showModal, user?.id, role]);
 
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus({ ...status, error: '', success: '' });
     try {

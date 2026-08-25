@@ -23,3 +23,5 @@ services:
       DATABASE_URL: postgres://admin:qflow1234@db:5432/qflow_db
       JWT_SECRET: qflow_super_secret_key_2026
       GOOGLE_CLIENT_ID: 61511368401-9c86lcmevn2fb4rkl6ir3o292sqtnbh8.apps.googleusercontent.com
+      SMTP_USER: qflow.noreply@gmail.com
+      SMTP_PASS: vxzgdztljtcfmlxx

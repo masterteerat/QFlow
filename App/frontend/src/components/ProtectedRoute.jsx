@@ -2,9 +2,9 @@ import { Navigate } from 'react-router-dom';
 import { getCustomer, getOwner } from '../lib/auth';
 
 /**
- * ห่อ route ที่ต้อง login ก่อนถึงจะเข้าได้
- * role="customer" -> เช็ค customer_user ใน localStorage, ถ้าไม่มีเด้งไป /login
- * role="owner"     -> เช็ค owner_user ใน localStorage, ถ้าไม่มีเด้งไป /owner/login
+ * Wrapper for routes that require authentication
+ * role="customer" -> checks customer_user in localStorage, redirects to /login if missing
+ * role="owner"     -> checks owner_user in localStorage, redirects to /owner/login if missing
  */
 export default function ProtectedRoute({ role, children }) {
   const user = role === 'owner' ? getOwner() : getCustomer();

@@ -27,7 +27,7 @@ export default function OwnerProfile() {
     try {
       const res = await api.put(`/owner/profile/${owner.id}`, form);
       if (res.success) {
-        // อัปเดตข้อมูลที่อยู่ใน Local Storage ด้วย
+        
         localStorage.setItem('owner_user', JSON.stringify(res.owner));
         setStatus({ ...status, success: 'Owner profile updated successfully!' });
       } else setStatus({ ...status, error: res.message });

@@ -64,7 +64,7 @@ const TicketModel = {
          t.ticket_id, t.queue_number, t.created_at,
          t.pax,
          b.business_name, 
-         COALESCE(ts.date, q.date) AS date, -- 🚀 แก้ตรงนี้: ดึง ts.date มาใช้ก่อน ถ้าเป็น Walk-in ค่อยใช้ q.date
+         COALESCE(ts.date, q.date) AS date,
         COALESCE(ts.start_time::text, '-') AS start_time,
         COALESCE(ts.end_time::text, '-') AS end_time,
         st.status_name
@@ -84,7 +84,7 @@ const TicketModel = {
       SELECT
          t.ticket_id, t.queue_number, t.created_at, t.status_id, t.pax,
          b.business_id, b.business_name, 
-         COALESCE(ts.date, q.date) AS date, -- 🚀 แก้ตรงนี้เช่นกัน
+         COALESCE(ts.date, q.date) AS date,
         COALESCE(ts.start_time::text, '-') AS start_time,
         COALESCE(ts.end_time::text, '-') AS end_time,
         st.status_name,
@@ -178,7 +178,7 @@ const TicketModel = {
       [toStatus, ticketId, fromStatus]
     );
     return result.rows[0];
-  }, // <-- เพิ่มลูกน้ำ (comma) ตรงนี้ เพื่อเชื่อมฟังก์ชันต่อไป
+  }, // comma to connect next function
 
   checkTimeOverlap: async (businessId, date, startTime, endTime) => {
     const query = `
@@ -188,9 +188,9 @@ const TicketModel = {
       JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
       WHERE q.business_id = $1 
         AND q.date = $2 
-        AND t.status_id != $5  -- ยกเว้นคิวที่ถูกยกเลิก (STATUS.CANCELLED)
-        AND ts.start_time < $4 -- เวลาเริ่มของคิวเดิม < เวลาจบของคิวใหม่
-        AND ts.end_time > $3   -- เวลาจบของคิวเดิม > เวลาเริ่มของคิวใหม่
+        AND t.status_id != $5
+        AND ts.start_time < $4
+        AND ts.end_time > $3
     `;
     
     const values = [businessId, date, startTime, endTime, STATUS.CANCELLED];
@@ -198,6 +198,6 @@ const TicketModel = {
     
     return rows.length > 0;
   }
-}; // <-- ปีกกาปิด TicketModel ต้องมีอันเดียวตรงนี้เท่านั้น
+};
 
 module.exports = TicketModel;

@@ -7,6 +7,8 @@ const ticket = require('../controllers/ticketController');
 
 router.post('/signup', auth.signup);
 router.post('/login', auth.login);
+router.post('/verify-otp', auth.verifyOTP);
+router.post('/resend-otp', auth.resendOTP);
 
 router.get('/businesses', business.getBusinesses);
 router.get('/categories', business.getCategories);

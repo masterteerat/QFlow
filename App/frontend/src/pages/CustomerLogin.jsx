@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google'; 
+import { GoogleLogin } from '@react-oauth/google';
 import { api } from '../lib/api';
+import OTPModal from '../components/OTPModal';
 
 export default function CustomerLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showOTP, setShowOTP] = useState(false);
+  const [otpEmail, setOtpEmail] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -17,12 +20,31 @@ export default function CustomerLogin() {
       const data = await api.post('/customer/login', { email, password });
       if (!data.success) return setError(data.message);
 
-      if (data.token) localStorage.setItem('token', data.token);
-      localStorage.setItem('customer_user', JSON.stringify(data.user));
-      navigate('/businesses');
+      if (data.requireOTP) {
+        setOtpEmail(data.email);
+        setShowOTP(true);
+      } else if (data.token) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('customer_user', JSON.stringify(data.user));
+        navigate('/businesses');
+      }
     } catch {
       setError('Could not connect to the server.');
     }
+  };
+
+  const handleVerifyOTP = async (email, otp) => {
+    const data = await api.post('/customer/verify-otp', { email, otp });
+    if (!data.success) throw new Error(data.message);
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('customer_user', JSON.stringify(data.user));
+    setShowOTP(false);
+    navigate('/businesses');
+  };
+
+  const handleResendOTP = async (email) => {
+    const data = await api.post('/customer/resend-otp', { email });
+    if (!data.success) throw new Error(data.message);
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
@@ -30,7 +52,6 @@ export default function CustomerLogin() {
       const data = await api.post('/customer/google-login', { 
         credential: credentialResponse.credential 
       });
-      
       if (!data.success) return setError(data.message);
 
       if (data.token) localStorage.setItem('token', data.token);
@@ -43,14 +64,12 @@ export default function CustomerLogin() {
 
   const handleQuickLogin = () => {
     setError('');
-    
     localStorage.setItem('token', 'bypass-test-token');
     localStorage.setItem('customer_user', JSON.stringify({ 
       id: 1, 
       fname: 'John (Tester)', 
       email: 'john@qflow.com' 
     }));
-    
     navigate('/businesses');
   };
 
@@ -93,7 +112,7 @@ export default function CustomerLogin() {
             onClick={handleQuickLogin}
             className="bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold py-2 px-4 rounded transition-colors"
           >
-            🚀 Quick Login (Test Customer)
+            Quick Login (Test Customer)
           </button>
           <div className="mt-4 flex flex-col items-center gap-3">
             <div className="relative flex items-center py-2 w-full">
@@ -119,6 +138,15 @@ export default function CustomerLogin() {
             Shop owner? <Link to="/owner/login" className="text-teal-700 dark:text-teal-400 hover:underline">Owner login</Link>
           </p>
         </div>
+
+        <OTPModal
+          isOpen={showOTP}
+          onClose={() => setShowOTP(false)}
+          onVerify={handleVerifyOTP}
+          email={otpEmail}
+          role="customer"
+          onResend={handleResendOTP}
+        />
       </div>
     </div>
   );

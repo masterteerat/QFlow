@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import RegisterBusinessModal from './RegisterBusinessModal';
 import EditScheduleModal from './EditScheduleModal';
-import QRScannerModal from '../components/QRScannerModal'; // Import Component QR
+import QRScannerModal from '../components/QRScannerModal';
 import { api } from '../lib/api';
 import { getOwner } from '../lib/auth';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useToast } from '../context/ToastContext';
 
 export default function OwnerHome() {
   const { businessId } = useParams();
@@ -20,9 +21,10 @@ export default function OwnerHome() {
   
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showEditScheduleModal, setShowEditScheduleModal] = useState(false);
-  const [showScanner, setShowScanner] = useState(false); // State สำหรับกล้องสแกน
+  const [showScanner, setShowScanner] = useState(false);
 
   const owner = getOwner();
+  const { toast } = useToast();
 
   const selectedShop = businessId
     ? myShops.find((s) => String(s.business_id) === businessId)
@@ -78,37 +80,37 @@ export default function OwnerHome() {
     try {
       const result = await api.patch(`/owner/tickets/${ticketId}/${action}`);
       if (result.success) {
+        toast.success('Action completed');
         fetchQueue(businessId);
         fetchMyShops();
       } else {
-        alert(result.message);
+        toast.error(result.message);
       }
     } catch (error) {
       console.error(`${action} error:`, error);
-      alert('Could not reach the server.');
+      toast.error('Could not reach the server.');
     } finally {
       setActionLoadingId(null);
     }
   };
-
-  // ฟังก์ชันยิง API เมื่อสแกนสำเร็จ
+  
   const handleScanSuccess = async (qrDataString) => {
     setShowScanner(false);
     try {
-      const payload = JSON.parse(qrDataString); // ถอด JSON Payload ออกมา
+      const payload = JSON.parse(qrDataString);
       
       setActionLoadingId(payload.ticketId);
       const result = await api.patch(`/owner/tickets/${payload.ticketId}/checkin`, payload);
       
       if (result.success) {
-        alert(`Check-in for Ticket #${payload.ticketId} Successful!`);
+        toast.success(`Check-in for Ticket #${payload.ticketId} Successful!`);
         fetchQueue(businessId);
         fetchMyShops();
       } else {
-        alert(result.message);
+        toast.error(result.message);
       }
     } catch (err) {
-      alert('Invalid QR Code format or payload is corrupted.');
+      toast.error('Invalid QR Code format or payload is corrupted.');
     } finally {
       setActionLoadingId(null);
     }
@@ -169,7 +171,7 @@ export default function OwnerHome() {
         {selectedShop && (
           <div>
             <button onClick={() => navigate('/owner/dashboard')} className="text-slate-500 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium mb-6">
-              ← Back to shops
+              \u2190 Back to shops
             </button>
 
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
@@ -177,7 +179,7 @@ export default function OwnerHome() {
                 <div>
                   <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">{selectedShop.business_name}</h2>
                   <p className="text-slate-500 dark:text-slate-400 text-sm">
-                    {selectedShop.is_deposit ? `Deposit: ฿${selectedShop.deposit_amount}` : 'No deposit required'}
+                    {selectedShop.is_deposit ? `Deposit: \u00A3${selectedShop.deposit_amount}` : 'No deposit required'}
                   </p>
                 </div>
                 <button
@@ -225,7 +227,7 @@ export default function OwnerHome() {
 
             {loadingQueue && <p className="text-slate-500 dark:text-slate-400 mb-4">Loading queue...</p>}
 
-            {/* ส่วน Waiting List พร้อมปุ่ม Scan QR */}
+            {/* Waiting List with Scan QR button */}
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">Waiting ({waitingList.length})</h3>
               

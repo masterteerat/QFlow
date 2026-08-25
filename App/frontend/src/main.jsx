@@ -8,7 +8,7 @@ const GOOGLE_CLIENT_ID = "61511368401-9c86lcmevn2fb4rkl6ir3o292sqtnbh8.apps.goog
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {/* 3. คลุม App ด้วย Provider */}
+    {/* Wrap App with Google OAuth Provider */}
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <App />
     </GoogleOAuthProvider>
