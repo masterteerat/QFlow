@@ -3,18 +3,21 @@ import { Html5Qrcode } from "html5-qrcode";
 
 const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
   const [errorMsg, setErrorMsg] = useState("");
+  const [showUpload, setShowUpload] = useState(false);
   const scannerRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
 
     setErrorMsg("");
+    setShowUpload(false);
 
     const isSecureContext = window.isSecureContext || window.location.hostname === "localhost";
     if (!isSecureContext) {
       setErrorMsg(
-        "Camera access blocked: requires HTTPS or localhost (Secure Context)"
+        "Camera not available on HTTP. Use HTTPS, localhost, or upload an image below."
       );
+      setShowUpload(true);
       return;
     }
 
@@ -37,6 +40,7 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
         )
         .catch((err) => {
           setErrorMsg(`Cannot open camera: ${err?.message || "Please allow camera access"}`);
+          setShowUpload(true);
         });
     };
 
@@ -63,7 +67,7 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
 
     try {
       const html5QrCode = scannerRef.current || new Html5Qrcode("reader");
-      const decodedText = await html5QrCode.scanFile(file, true);
+      const decodedText = await html5Qrcode.scanFile(file, true);
       onScanSuccess(decodedText);
       closeScanner();
     } catch (err) {
@@ -98,15 +102,19 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
 
         {errorMsg && <div style={styles.errorBox}>{errorMsg}</div>}
 
-        <div id="reader" style={styles.readerContainer}></div>
+        {!showUpload && (
+          <div id="reader" style={styles.readerContainer}></div>
+        )}
 
         <div style={styles.uploadSection}>
-          <p style={{ margin: "10px 0 5px" }}>Or upload a QR Code image:</p>
+          <p style={{ margin: "10px 0 5px", fontWeight: 600 }}>
+            {showUpload ? "📷 Camera unavailable — upload a QR Code image:" : "Or upload a QR Code image:"}
+          </p>
           <input 
             type="file" 
             accept="image/*" 
             onChange={handleFileUpload} 
-            style={{ width: "100%" }}
+            style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #ddd", background: "#fff" }}
           />
         </div>
 
@@ -134,9 +142,10 @@ const styles = {
     backgroundColor: "#000", minHeight: "250px"
   },
   errorBox: {
-    backgroundColor: "#ffebee", color: "#c62828",
-    padding: "10px", borderRadius: "4px", marginBottom: "15px",
-    fontSize: "14px", border: "1px solid #ffcdd2"
+    backgroundColor: "#fff3e0", color: "#e65100",
+    padding: "12px", borderRadius: "4px", marginBottom: "15px",
+    fontSize: "14px", border: "1px solid #ffe0b2",
+    textAlign: "left"
   },
   uploadSection: {
     marginTop: "15px", textAlign: "left", padding: "10px",
