@@ -35,13 +35,20 @@ export default function CustomerHome() {
   const [searchQuery, setSearchQuery] = useState('');
   const [queueTypeFilter, setQueueTypeFilter] = useState('all'); 
   const [depositFilter, setDepositFilter] = useState('all'); 
-  const [categoryFilter, setCategoryFilter] = useState([]); // ใช้ Array สำหรับ Multi-select
+  const [categoryFilter, setCategoryFilter] = useState([]); 
 
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [paymentModal, setPaymentModal] = useState(null); 
   const [ticket, setTicket] = useState(null); 
 
   const customer = getCustomer();
+
+  // 🚀 คำนวณขอบเขตวันที่ที่อนุญาตให้จอง (วันนี้ ถึง 14 วันข้างหน้า)
+  const todayDateObj = new Date();
+  todayDateObj.setHours(0, 0, 0, 0);
+  
+  const maxDateObj = new Date(todayDateObj);
+  maxDateObj.setDate(todayDateObj.getDate() + 14);
 
   useEffect(() => {
     Promise.all([fetchBusinesses(), fetchCategories()]);
@@ -67,7 +74,6 @@ export default function CustomerHome() {
     }
   };
 
-  // ฟังก์ชัน Toggle เลือก/ยกเลิก หมวดหมู่ (Multi-select)
   const handleCategoryToggle = (catId) => {
     setCategoryFilter((prev) =>
       prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
@@ -79,8 +85,6 @@ export default function CustomerHome() {
     const isWalkin = b.time_slots.length === 0;
     const matchesQueueType = queueTypeFilter === 'all' || (queueTypeFilter === 'walkin' && isWalkin) || (queueTypeFilter === 'timeslot' && !isWalkin);
     const matchesDeposit = depositFilter === 'all' || (depositFilter === 'with-deposit' && b.is_deposit) || (depositFilter === 'no-deposit' && !b.is_deposit);
-    
-    // กรองตาม Multi-select Category Filter (ถ้าไม่เลือกเลย = แสดงทั้งหมด)
     const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(b.category_id);
 
     return matchesSearch && matchesQueueType && matchesDeposit && matchesCategory;
@@ -201,11 +205,28 @@ export default function CustomerHome() {
 
           <div className="text-left space-y-2 border-t border-slate-100 dark:border-slate-700 pt-4 text-slate-700 dark:text-slate-300">
             <p><span className="font-semibold text-slate-800 dark:text-white">Shop:</span> {ticket.business_name}</p>
-            <p><span className="font-semibold text-slate-800 dark:text-white">Date:</span> {ticket.date}</p>
-            <p>
-              <span className="font-semibold text-slate-800 dark:text-white">Time:</span>{' '}
-              {ticket.start_time === '-' ? 'Walk-in (no set time)' : `${ticket.start_time.slice(0, 5)} - ${ticket.end_time.slice(0, 5)}`}
-            </p>
+            
+            {ticket.start_time === '-' ? (
+              <p>
+                <span className="font-semibold text-slate-800 dark:text-white">Booked on:</span>{' '}
+                {ticket.created_at ? new Date(ticket.created_at).toLocaleString('en-GB', {
+                  day: '2-digit', month: '2-digit', year: 'numeric',
+                  hour: '2-digit', minute: '2-digit'
+                }) : '-'}
+              </p>
+            ) : (
+              <>
+                <p>
+                  <span className="font-semibold text-slate-800 dark:text-white">Date:</span>{' '}
+                  {ticket.date ? new Date(ticket.date).toLocaleDateString('en-GB') : '-'}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800 dark:text-white">Time:</span>{' '}
+                  {`${ticket.start_time.slice(0, 5)} - ${ticket.end_time.slice(0, 5)}`}
+                </p>
+              </>
+            )}
+
             <p><span className="font-semibold text-slate-800 dark:text-white">Ticket ID:</span> #{ticket.ticket_id}</p>
           </div>
 
@@ -241,7 +262,6 @@ export default function CustomerHome() {
           <span className="absolute right-0 -top-5 text-xs text-slate-500 dark:text-slate-400 font-semibold">{businesses.length > 0 ? Math.round((filteredBusinesses.length / businesses.length) * 100) : 0}%</span>
         </div>
 
-        {/* Search & Filter Button */}
         <div className="flex gap-3 mt-4">
           <div className="relative flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -268,7 +288,6 @@ export default function CustomerHome() {
           </button>
         </div>
 
-        {/* Active Filters Summary */}
         {(searchQuery || activeFilterCount > 0) && (
           <div className="flex flex-wrap items-center gap-2 mt-3 text-sm">
             <span className="text-slate-500 dark:text-slate-400">Active:</span>
@@ -287,7 +306,6 @@ export default function CustomerHome() {
                 {depositFilter === 'with-deposit' ? 'With deposit' : 'No deposit'} <button onClick={() => setDepositFilter('all')} className="hover:text-rose-600 dark:hover:text-rose-400 text-lg leading-none">&times;</button>
               </span>
             )}
-            {/* แสดง Chip ของแต่ละ Category ที่ถูกเลือก */}
             {categoryFilter.map((catId) => {
               const catObj = categories.find((c) => c.category_id === catId);
               return (
@@ -299,7 +317,6 @@ export default function CustomerHome() {
           </div>
         )}
 
-        {/* --- Filter Modal --- */}
         {showFilterModal && (
           <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 transition-opacity">
             <div className="bg-white dark:bg-slate-800 w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl shadow-xl flex flex-col max-h-[85vh] transition-colors duration-300">
@@ -309,7 +326,6 @@ export default function CustomerHome() {
               </div>
 
               <div className="p-5 overflow-y-auto flex flex-col gap-6">
-                {/* Multi-select Category Section */}
                 <div>
                   <h4 className="font-bold text-slate-800 dark:text-white mb-3 text-sm uppercase tracking-wider">Category (Select Multiple)</h4>
                   <div className="flex flex-wrap gap-2">
@@ -338,7 +354,6 @@ export default function CustomerHome() {
                   </div>
                 </div>
 
-                {/* Queue Type Section */}
                 <div>
                   <h4 className="font-bold text-slate-800 dark:text-white mb-3 text-sm uppercase tracking-wider">Queue Type</h4>
                   <div className="flex flex-wrap gap-2">
@@ -348,7 +363,6 @@ export default function CustomerHome() {
                   </div>
                 </div>
 
-                {/* Deposit Section */}
                 <div>
                   <h4 className="font-bold text-slate-800 dark:text-white mb-3 text-sm uppercase tracking-wider">Deposit Required</h4>
                   <div className="flex flex-wrap gap-2">
@@ -370,7 +384,6 @@ export default function CustomerHome() {
             </div>
           </div>
         )}
-        {/* --- End Filter Modal --- */}
 
         <div className="flex items-center justify-between mt-6 mb-2">
           {filteredBusinesses.length > 0 && (
@@ -395,9 +408,17 @@ export default function CustomerHome() {
           <div className="grid gap-5 mt-2">
             {filteredBusinesses.map((b) => {
               const isWalkin = b.time_slots.length === 0;
+
+              // 🚀 คัดกรองวันที่เฉพาะ ปัจจุบัน ถึง 14 วันข้างหน้า เท่านั้น
               const availableDates = isWalkin
                 ? []
-                : [...new Set(b.time_slots.map((s) => toDateKey(s.date)))].sort();
+                : [...new Set(b.time_slots.map((s) => toDateKey(s.date)))]
+                    .filter((dateKey) => {
+                      const [y, m, d] = dateKey.split('-').map(Number);
+                      const slotDate = new Date(y, m - 1, d);
+                      return slotDate >= todayDateObj && slotDate <= maxDateObj;
+                    })
+                    .sort();
 
               const selectedDate = selectedDates[b.business_id] || availableDates[0];
               const slotsForDate = isWalkin
@@ -428,7 +449,7 @@ export default function CustomerHome() {
                     )}
                   </div>
 
-                  {!isWalkin && (
+                  {!isWalkin && availableDates.length > 0 && (
                     <>
                       <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-5 mb-2">Pick a date</h4>
                       <div className="flex gap-2 flex-wrap">
@@ -454,81 +475,88 @@ export default function CustomerHome() {
                     </>
                   )}
 
-                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-2">
-                    {isWalkin ? 'Available times' : 'Available times on this date'}
-                  </h4>
-                  <div className="flex gap-2 flex-wrap">
-                    {!isWalkin ? (
-                      slotsForDate.map((slot) => {
-                        const isSelected = selectedSlots[b.business_id] === slot.timeslot_id;
-                        return (
-                          <button
-                            key={slot.timeslot_id}
-                            onClick={() => handleSelectSlot(b.business_id, slot)}
-                            disabled={slot.is_booked}
-                            title={slot.is_booked ? 'This slot is already booked' : ''}
-                            className={`px-3 py-2 rounded-md text-sm border transition-colors ${
-                              slot.is_booked
-                                ? 'bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-600 line-through cursor-not-allowed border-slate-200 dark:border-slate-700'
-                                : isSelected
-                                ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-600 dark:border-teal-500 text-teal-800 dark:text-teal-300 shadow-sm'
-                                : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-teal-400'
-                            }`}
-                          >
-                            {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)}
-                            {slot.is_booked ? ' - full' : ` - ${slot.remaining} left`}
-                          </button>
-                        );
-                      })
-                    ) : (
-                      <span className="text-slate-600 dark:text-slate-300 text-sm flex items-center gap-2">
-                        <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        Walk-in only - take a ticket immediately
-                      </span>
-                    )}
-                   </div>
+                  {!isWalkin && availableDates.length === 0 && (
+                    <p className="text-slate-500 dark:text-slate-400 text-sm mt-4">No available timeslots for the next 14 days.</p>
+                  )}
 
-                   <div className="mt-3 flex items-center gap-2">
-                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                       People{maxPax !== null ? ` (max ${maxPax} left)` : ''}:
-                     </span>
-                     <button
-                       type="button"
-                       onClick={() => setPaxByBusiness((p) => ({ ...p, [b.business_id]: Math.max(1, (p[b.business_id] || 1) - 1) }))}
-                       className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold"
-                     >
-                       −
-                     </button>
-                     <span className="w-6 text-center font-bold text-slate-800 dark:text-white">{currentPax}</span>
-                     <button
-                       type="button"
-                       disabled={maxPax !== null && currentPax >= maxPax}
-                       onClick={() => setPaxByBusiness((p) => {
-                         const next = (p[b.business_id] || 1) + 1;
-                         return { ...p, [b.business_id]: maxPax !== null ? Math.min(next, maxPax) : next };
-                       })}
-                       className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                     >
-                       +
-                     </button>
-                   </div>
+                  {(isWalkin || availableDates.length > 0) && (
+                    <>
+                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-2">
+                        {isWalkin ? 'Available times' : 'Available times on this date'}
+                      </h4>
+                      <div className="flex gap-2 flex-wrap">
+                        {!isWalkin ? (
+                          slotsForDate.map((slot) => {
+                            const isSelected = selectedSlots[b.business_id] === slot.timeslot_id;
+                            return (
+                              <button
+                                key={slot.timeslot_id}
+                                onClick={() => handleSelectSlot(b.business_id, slot)}
+                                disabled={slot.is_booked}
+                                title={slot.is_booked ? 'This slot is already booked' : ''}
+                                className={`px-3 py-2 rounded-md text-sm border transition-colors ${
+                                  slot.is_booked
+                                    ? 'bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-600 line-through cursor-not-allowed border-slate-200 dark:border-slate-700'
+                                    : isSelected
+                                    ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-600 dark:border-teal-500 text-teal-800 dark:text-teal-300 shadow-sm'
+                                    : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-teal-400'
+                                }`}
+                              >
+                                {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)}
+                                {slot.is_booked ? ' - full' : ` - ${slot.remaining} left`}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <span className="text-slate-600 dark:text-slate-300 text-sm flex items-center gap-2">
+                            <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            Walk-in only - take a ticket immediately
+                          </span>
+                        )}
+                      </div>
 
-                   <button
-                    onClick={() => handleStartBooking(b)}
-                    disabled={!isWalkin && allSlotsBookedForDate}
-                    className={`mt-5 w-full sm:w-auto px-6 py-2.5 rounded-lg font-bold text-white transition-colors shadow-sm ${
-                      (!isWalkin && allSlotsBookedForDate) ? 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed' : 'bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-700'
-                    }`}
-                  >
-                    {(!isWalkin && allSlotsBookedForDate) ? 'Fully booked on this date' : isWalkin ? 'Take a ticket' : 'Confirm booking'}
-                  </button>
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          People{maxPax !== null ? ` (max ${maxPax} left)` : ''}:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPaxByBusiness((p) => ({ ...p, [b.business_id]: Math.max(1, (p[b.business_id] || 1) - 1) }))}
+                          className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold"
+                        >
+                          −
+                        </button>
+                        <span className="w-6 text-center font-bold text-slate-800 dark:text-white">{currentPax}</span>
+                        <button
+                          type="button"
+                          disabled={maxPax !== null && currentPax >= maxPax}
+                          onClick={() => setPaxByBusiness((p) => {
+                            const next = (p[b.business_id] || 1) + 1;
+                            return { ...p, [b.business_id]: maxPax !== null ? Math.min(next, maxPax) : next };
+                          })}
+                          className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => handleStartBooking(b)}
+                        disabled={!isWalkin && allSlotsBookedForDate}
+                        className={`mt-5 w-full sm:w-auto px-6 py-2.5 rounded-lg font-bold text-white transition-colors shadow-sm ${
+                          (!isWalkin && allSlotsBookedForDate) ? 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed' : 'bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-700'
+                        }`}
+                      >
+                        {(!isWalkin && allSlotsBookedForDate) ? 'Fully booked on this date' : isWalkin ? 'Take a ticket' : 'Confirm booking'}
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* --- Payment Modal --- */}
         {paymentModal && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 p-8 rounded-xl max-w-sm w-full text-center shadow-lg transition-colors duration-300">

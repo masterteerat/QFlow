@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const pool = require('../config/db'); // เพิ่มการเรียกใช้ database ตรงนี้เพื่อดึงเวลา
 const TicketModel = require('../models/ticketModel');
 const { STATUS } = TicketModel;
 
@@ -26,6 +27,7 @@ exports.createTicket = async (req, res) => {
 
   try {
     if (timeslot_id) {
+      // 1. เช็คว่ามีรอบเวลานี้อยู่จริง และเช็คจำนวนที่ว่าง (Capacity)
       const availability = await TicketModel.getSlotAvailability(timeslot_id);
       if (!availability) {
         return res.status(404).json({ success: false, message: 'Time slot not found.' });
@@ -43,8 +45,54 @@ exports.createTicket = async (req, res) => {
           message: `Only ${remaining} spot${remaining === 1 ? '' : 's'} left in this slot.`
         });
       }
+
+      // ==========================================
+      // 🚀 2. ส่วนที่เพิ่มใหม่: เช็คเวลาทับซ้อน (Overlapping Booking)
+      // ==========================================
+      // 2.1 ดึงเวลาเริ่มและจบของ timeslot ที่ลูกค้าเลือกมาเปรียบเทียบ
+      const slotInfo = await pool.query(
+        'SELECT start_time, end_time FROM time_slot WHERE timeslot_id = $1',
+        [timeslot_id]
+      );
+
+      if (slotInfo.rows.length > 0) {
+        const { start_time, end_time } = slotInfo.rows[0];
+
+        // 2.2 Query เช็คว่า "ลูกค้ารายนี้" มีการจองคิวในวันเดียวกันที่เวลาทับซ้อนกันหรือไม่
+        const overlapQuery = `
+          SELECT t.ticket_id
+          FROM ticket t
+          JOIN queue q ON q.queue_id = t.queue_id
+          JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+          WHERE t.customer_id = $1
+            AND q.date = $2
+            AND t.status_id NOT IN ($5, $6) -- ยกเว้นคิวที่ถูกยกเลิก (4) หรือเสร็จสิ้นไปแล้ว (3)
+            AND ts.start_time < $4 -- เวลาเริ่มของคิวเดิม < เวลาจบของคิวใหม่
+            AND ts.end_time > $3   -- เวลาจบของคิวเดิม > เวลาเริ่มของคิวใหม่
+        `;
+        const overlapValues = [
+          customer_id, 
+          availability.date, 
+          start_time, 
+          end_time, 
+          STATUS.CANCELLED, 
+          STATUS.COMPLETED
+        ];
+        
+        const { rows: overlapRows } = await pool.query(overlapQuery, overlapValues);
+
+        // ถ้า Query แล้วเจอข้อมูล แปลว่าเวลาทับซ้อน ให้ตีกลับทันที
+        if (overlapRows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            message: 'คุณมีการจองคิวในช่วงเวลานี้อยู่แล้ว (เวลาทับซ้อนกัน) กรุณาเลือกเวลาอื่นครับ'
+          });
+        }
+      }
+      // ==========================================
     }
 
+    // 3. ถ้าเวลาไม่ทับซ้อนและมีที่ว่าง ก็ทำการสร้างคิวตามปกติ
     const queueId = await TicketModel.findOrCreateTodayQueue(business_id);
     const queueNumber = await TicketModel.nextQueueNumber(queueId);
 

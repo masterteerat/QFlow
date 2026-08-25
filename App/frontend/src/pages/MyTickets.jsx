@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
-import { QRCodeSVG } from 'qrcode.react'; // นำเข้าไลบรารี
+import { QRCodeSVG } from 'qrcode.react';
 
 const ACTIVE_STATUSES = ['Waiting', 'Serving'];
 
@@ -120,10 +120,25 @@ export default function MyTickets() {
                 {/* ข้อมูลร้าน */}
                 <div className="w-full sm:w-auto flex-1 text-center sm:text-left">
                   <h3 className="font-bold text-slate-800 dark:text-white text-lg">{t.business_name}</h3>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Date: {t.date}</p>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm">
-                    Time: {t.start_time === '-' ? 'Walk-in (no set time)' : `${t.start_time.slice(0, 5)} - ${t.end_time.slice(0, 5)}`}
-                  </p>
+                  
+                  {/* 🚀 โค้ดส่วนที่แยก Walk-in กับ Timeslot ออกจากกัน */}
+                  {t.start_time === '-' ? (
+                    // กรณี Walk-in: ดึง t.created_at มาโชว์ (วันที่และเวลาที่กดจอง)
+                    <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                      Booked on: {t.created_at ? new Date(t.created_at).toLocaleString('en-GB', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                      }) : '-'}
+                    </p>
+                  ) : (
+                    // กรณี Timeslot: ดึง t.date (วันที่นัดหมาย) กับ start/end time มาโชว์
+                    <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                      Reserved for: {t.date ? new Date(t.date).toLocaleDateString('en-GB') : '-'}
+                      {' '}at{' '}
+                      {`${t.start_time.slice(0, 5)} - ${t.end_time.slice(0, 5)}`}
+                    </p>
+                  )}
+                  
                   {Number(t.amount_paid) > 0 && <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold text-teal-600 dark:text-teal-400 mt-1">Deposit paid: ฿{t.amount_paid}</p>}
                 </div>
 

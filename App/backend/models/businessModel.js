@@ -2,7 +2,7 @@ const pool = require('../config/db');
 
 const BusinessModel = {
   // Public list for customers, with each slot flagged as booked or free.
-findAllWithSlots: async ({ search, categoryIds } = {}) => {
+  findAllWithSlots: async ({ search, categoryIds } = {}) => {
     let query = `
       SELECT
         b.business_id,
@@ -29,7 +29,7 @@ findAllWithSlots: async ({ search, categoryIds } = {}) => {
         ) AS time_slots
       FROM business b
       LEFT JOIN time_slot ts ON ts.business_id = b.business_id
-        AND ts.date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '13 days'
+        AND ts.date BETWEEN (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE AND (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE + INTERVAL '13 days'
       LEFT JOIN category c ON c.category_id = b.category_id
       LEFT JOIN (
         SELECT timeslot_id, SUM(pax) AS total_pax FROM ticket
@@ -81,7 +81,8 @@ findAllWithSlots: async ({ search, categoryIds } = {}) => {
         COUNT(t.ticket_id) FILTER (WHERE t.status_id = 2) AS serving_count
       FROM business b
       LEFT JOIN category c ON c.category_id = b.category_id
-      LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = CURRENT_DATE
+      -- 🚀 แก้ตรงนี้: ล็อกเป็นวันที่ของประเทศไทย
+      LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
       LEFT JOIN ticket t ON t.queue_id = q.queue_id
       WHERE b.owner_id = $1
       GROUP BY b.business_id, c.category_id
@@ -102,10 +103,14 @@ findAllWithSlots: async ({ search, categoryIds } = {}) => {
   },
 
   addTimeSlots: async (client, businessId, slots) => {
-    // Stamp the daily template across the next 14 days (today through +13 days)
     const dates = [];
+    
+    // 🚀 แก้ตรงนี้: บังคับให้เริ่มคำนวณวันจากเวลาของประเทศไทย ป้องกัน Node.js อิงเวลา UTC
+    const bangkokTimeStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" });
+    const baseDate = new Date(bangkokTimeStr);
+
     for (let i = 0; i < 14; i++) {
-      const d = new Date();
+      const d = new Date(baseDate);
       d.setDate(d.getDate() + i);
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -136,26 +141,24 @@ findAllWithSlots: async ({ search, categoryIds } = {}) => {
   },
 
   // Current daily template — dedupe by time since every day repeats the same blocks
-  // 🟢 ORDER BY start_time เดิมมีอยู่แล้ว ใช้งานถูกต้อง
   getSchedule: async (businessId) => {
     const result = await pool.query(
       `SELECT DISTINCT start_time, end_time, max_capacity
        FROM time_slot
-       WHERE business_id = $1 AND date >= CURRENT_DATE
+       -- 🚀 แก้ตรงนี้: ล็อกเป็นวันที่ของประเทศไทย
+       WHERE business_id = $1 AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
        ORDER BY start_time ASC`,
       [businessId]
     );
     return result.rows;
   },
 
-  // Replaces the daily template for the whole shop, re-stamping the next 14 days.
-  // Slots that already have a booking are left alone — never deleted out from
-  // under a customer who already reserved them.
   updateSchedule: async (client, businessId, slots) => {
     await client.query(
       `DELETE FROM time_slot
        WHERE business_id = $1
-         AND date >= CURRENT_DATE
+         -- 🚀 แก้ตรงนี้: ล็อกเป็นวันที่ของประเทศไทย
+         AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
          AND timeslot_id NOT IN (
            SELECT timeslot_id FROM ticket WHERE timeslot_id IS NOT NULL
          )`,

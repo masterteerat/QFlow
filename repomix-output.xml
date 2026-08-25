@@ -60,6 +60,7 @@ App/
     .dockerignore
     .gitignore
     app.js
+    mailer.js
     package.json
     server.js
   frontend/
@@ -113,6 +114,35 @@ README.md
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="App/backend/mailer.js">
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+exports.sendOTP = async (toEmail, otpCode) => {
+  const mailOptions = {
+    from: `"QFlow Security" <${process.env.SMTP_USER}>`,
+    to: toEmail,
+    subject: 'รหัส OTP สำหรับเข้าสู่ระบบ QFlow',
+    html: `
+      <div style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
+        <h2>รหัส OTP ของคุณคือ</h2>
+        <h1 style="color: #0f766e; font-size: 40px; letter-spacing: 5px;">${otpCode}</h1>
+        <p>รหัสนี้จะหมดอายุภายใน 5 นาที ห้ามให้รหัสนี้กับบุคคลอื่นเด็ดขาด</p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+</file>
 
 <file path="App/backend/.dockerignore">
 node_modules
@@ -203,47 +233,6 @@ export default function ProtectedRoute({ role, children }) {
   }
 
   return children;
-}
-</file>
-
-<file path="App/frontend/src/components/QRScannerModal.jsx">
-import { useEffect } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-
-export default function QRScannerModal({ onClose, onScanSuccess }) {
-  useEffect(() => {
-    // กำหนดค่า scanner ให้อ่านไวและครอบคลุม
-    const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
-    
-    scanner.render((text) => {
-      onScanSuccess(text);
-      scanner.clear();
-    }, (error) => {
-      // ignore scanning background errors
-    });
-
-    return () => { 
-      scanner.clear().catch(() => {}); 
-    };
-  }, [onScanSuccess]);
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl max-w-md w-full transition-colors duration-300">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-slate-800 dark:text-white text-lg">Scan QR Code to Check-in</h3>
-          <button onClick={onClose} className="text-3xl font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 leading-none">&times;</button>
-        </div>
-        
-        {/* กล่องแสดงกล้อง */}
-        <div id="qr-reader" className="overflow-hidden rounded-lg bg-white [&>div]:border-none"></div>
-        
-        <button onClick={onClose} className="mt-6 w-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-lg font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
 }
 </file>
 
@@ -635,22 +624,6 @@ Note: This will impact Vite dev & build performances.
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
 </file>
 
-<file path="App/frontend/vite.config.js">
-import { defineConfig } from 'vite'
-import react, { reactCompilerPreset } from '@vitejs/plugin-react'
-import babel from '@rolldown/plugin-babel'
-import tailwindcss from '@tailwindcss/vite'
-
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    babel({ presets: [reactCompilerPreset()] })
-  ],
-})
-</file>
-
 <file path="App/backend/controllers/customerAuthController.js">
 const { OAuth2Client } = require('google-auth-library');
 const bcrypt = require('bcryptjs');
@@ -905,6 +878,7 @@ module.exports = app;
     "express": "^4.22.2",
     "google-auth-library": "^11.0.2",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^9.0.5",
     "pg": "^8.22.0"
   },
   "devDependencies": {
@@ -922,6 +896,180 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+</file>
+
+<file path="App/frontend/src/components/QRScannerModal.jsx">
+import React, { useEffect, useRef, useState } from "react";
+import { Html5Qrcode } from "html5-qrcode";
+
+const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
+  const [errorMsg, setErrorMsg] = useState("");
+  const scannerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // เคลียร์ Error ทุกครั้งที่เปิด Modal
+    setErrorMsg("");
+
+    // 1. เช็ค Secure Context (แก้ปัญหากล้องไม่ขึ้นเวลาเทสมือถือผ่าน IP)
+    const isSecureContext = window.isSecureContext || window.location.hostname === "localhost";
+    if (!isSecureContext) {
+      setErrorMsg(
+        "เบราว์เซอร์บล็อกการใช้งานกล้อง เนื่องจากไม่ได้เชื่อมต่อผ่าน HTTPS หรือ localhost (Secure Context)"
+      );
+      return;
+    }
+
+    // 2. สร้าง instance ของ Html5Qrcode
+    const html5QrCode = new Html5Qrcode("reader");
+    scannerRef.current = html5QrCode;
+
+    // 3. ดีเลย์ 300ms เพื่อหลบปัญหา React.StrictMode Mount/Unmount ชนกัน
+    let startTimeout;
+    const startScanner = () => {
+      html5QrCode
+        .start(
+          { facingMode: "environment" }, // ใช้กล้องหลัง
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            // สำเร็จ!
+            onScanSuccess(decodedText);
+            closeScanner();
+          },
+          (errorMessage) => {
+            // error ระหว่างสแกนปกติ (เช่น ไม่เจอ QR ในเฟรม) เราจะปล่อยผ่านเงียบๆ
+            // เพราะมันจะแจ้งเตือนรัวๆ ทุกเฟรมที่หา QR ไม่เจอ
+          }
+        )
+        .catch((err) => {
+          // ดักจับ Error ตอนขอ Permission หรือกล้องพัง
+          setErrorMsg(`ไม่สามารถเปิดกล้องได้: ${err?.message || "กรุณาอนุญาตการเข้าถึงกล้อง"}`);
+        });
+    };
+
+    startTimeout = setTimeout(startScanner, 300);
+
+    // Cleanup function เมื่อปิด Modal หรือ Component Unmount
+    return () => {
+      clearTimeout(startTimeout);
+      if (html5QrCode.isScanning) {
+        html5QrCode
+          .stop()
+          .then(() => html5QrCode.clear())
+          .catch((err) => console.error("Failed to clear html5Qrcode on unmount", err));
+      } else {
+        html5QrCode.clear();
+      }
+    };
+  }, [isOpen]); // ทำงานใหม่เมื่อ isOpen เปลี่ยนแปลง
+
+  // ฟังก์ชันสำหรับการอัปโหลดรูปภาพ
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setErrorMsg(""); // เคลียร์ error เก่าก่อน
+
+    try {
+      // ตรวจสอบว่ามี instance อยู่ไหม ถ้าไม่มีให้สร้างใหม่ (กรณีกล้องพังแต่จะใช้อัปโหลดแทน)
+      const html5QrCode = scannerRef.current || new Html5Qrcode("reader");
+      
+      // สั่งสแกนจากไฟล์
+      const decodedText = await html5QrCode.scanFile(file, true);
+      
+      onScanSuccess(decodedText);
+      closeScanner();
+    } catch (err) {
+      // ดักจับ Error ตอนอ่านรูปภาพ (รูปเบลอ, ไม่ใช่ QR, แสงไม่พอ)
+      setErrorMsg("อ่าน QR Code จากรูปไม่สำเร็จ กรุณาใช้รูปที่ชัดเจนกว่านี้");
+      console.error("File Scan Error:", err);
+    }
+  };
+
+  // ฟังก์ชันปิดกล้องและปิด Modal อย่างปลอดภัย
+  const closeScanner = () => {
+    if (scannerRef.current && scannerRef.current.isScanning) {
+      scannerRef.current
+        .stop()
+        .then(() => {
+          scannerRef.current.clear();
+          onClose();
+        })
+        .catch((err) => {
+          console.error("Failed to stop scanner", err);
+          onClose();
+        });
+    } else {
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div style={styles.overlay}>
+      <div style={styles.modal}>
+        <h2 style={{ marginTop: 0 }}>สแกน QR Code</h2>
+
+        {/* แสดง Error แบบชัดเจน */}
+        {errorMsg && <div style={styles.errorBox}>{errorMsg}</div>}
+
+        {/* พื้นที่สำหรับแสดงกล้อง (ต้องมี id="reader") */}
+        <div id="reader" style={styles.readerContainer}></div>
+
+        {/* ส่วนอัปโหลดรูปภาพ */}
+        <div style={styles.uploadSection}>
+          <p style={{ margin: "10px 0 5px" }}>หรืออัปโหลดรูปภาพ QR Code:</p>
+          <input 
+            type="file" 
+            accept="image/*" 
+            onChange={handleFileUpload} 
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <button onClick={closeScanner} style={styles.closeButton}>
+          ปิด
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// สไตล์เบื้องต้น (คุณสามารถเปลี่ยนไปใช้ Tailwind CSS หรือไฟล์ CSS ของคุณเองได้)
+const styles = {
+  overlay: {
+    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    display: "flex", justifyContent: "center", alignItems: "center",
+    zIndex: 9999, padding: "20px"
+  },
+  modal: {
+    backgroundColor: "#fff", padding: "20px", borderRadius: "8px",
+    width: "100%", maxWidth: "400px", textAlign: "center"
+  },
+  readerContainer: {
+    width: "100%", overflow: "hidden", borderRadius: "8px",
+    backgroundColor: "#000", minHeight: "250px"
+  },
+  errorBox: {
+    backgroundColor: "#ffebee", color: "#c62828",
+    padding: "10px", borderRadius: "4px", marginBottom: "15px",
+    fontSize: "14px", border: "1px solid #ffcdd2"
+  },
+  uploadSection: {
+    marginTop: "15px", textAlign: "left", padding: "10px",
+    backgroundColor: "#f5f5f5", borderRadius: "8px"
+  },
+  closeButton: {
+    marginTop: "20px", padding: "10px 20px",
+    backgroundColor: "#d32f2f", color: "#fff",
+    border: "none", borderRadius: "4px", cursor: "pointer", width: "100%"
+  }
+};
+
+export default QRScannerModal;
 </file>
 
 <file path="App/frontend/src/lib/api.js">
@@ -981,6 +1129,27 @@ createRoot(document.getElementById('root')).render(
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
+</file>
+
+<file path="App/frontend/vite.config.js">
+import { defineConfig } from 'vite'
+import react, { reactCompilerPreset } from '@vitejs/plugin-react'
+import babel from '@rolldown/plugin-babel'
+import tailwindcss from '@tailwindcss/vite'
+import basicSsl from '@vitejs/plugin-basic-ssl'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    babel({ presets: [reactCompilerPreset()] }),
+    basicSsl()
+  ],
+  server: {
+    host: true
+  }
+})
 </file>
 
 <file path="Docker/Dockerfile">
@@ -1385,8 +1554,27 @@ const TicketModel = {
       [toStatus, ticketId, fromStatus]
     );
     return result.rows[0];
+  }, // <-- เพิ่มลูกน้ำ (comma) ตรงนี้ เพื่อเชื่อมฟังก์ชันต่อไป
+
+  checkTimeOverlap: async (businessId, date, startTime, endTime) => {
+    const query = `
+      SELECT t.ticket_id 
+      FROM ticket t
+      JOIN queue q ON q.queue_id = t.queue_id
+      JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+      WHERE q.business_id = $1 
+        AND q.date = $2 
+        AND t.status_id != $5  -- ยกเว้นคิวที่ถูกยกเลิก (STATUS.CANCELLED)
+        AND ts.start_time < $4 -- เวลาเริ่มของคิวเดิม < เวลาจบของคิวใหม่
+        AND ts.end_time > $3   -- เวลาจบของคิวเดิม > เวลาเริ่มของคิวใหม่
+    `;
+    
+    const values = [businessId, date, startTime, endTime, STATUS.CANCELLED];
+    const { rows } = await pool.query(query, values);
+    
+    return rows.length > 0;
   }
-};
+}; // <-- ปีกกาปิด TicketModel ต้องมีอันเดียวตรงนี้เท่านั้น
 
 module.exports = TicketModel;
 </file>
@@ -2042,46 +2230,6 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess }) {
 }
 </file>
 
-<file path="App/frontend/package.json">
-{
-  "name": "frontend",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@react-oauth/google": "^0.13.5",
-    "@tailwindcss/vite": "^4.3.3",
-    "html5-qrcode": "^2.3.8",
-    "qrcode.react": "^4.2.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.1",
-    "recharts": "^3.10.1",
-    "tailwindcss": "^4.3.3"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.29.7",
-    "@eslint/js": "^10.0.1",
-    "@rolldown/plugin-babel": "^0.2.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
-    "babel-plugin-react-compiler": "^1.0.0",
-    "eslint": "^10.6.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.3",
-    "globals": "^17.7.0",
-    "vite": "^8.1.1"
-  }
-}
-</file>
-
 <file path=".gitignore">
 node_modules/
 .DS_Store
@@ -2264,6 +2412,7 @@ exports.updateSchedule = async (req, res) => {
 
 <file path="App/backend/controllers/ticketController.js">
 const crypto = require('crypto');
+const pool = require('../config/db'); // เพิ่มการเรียกใช้ database ตรงนี้เพื่อดึงเวลา
 const TicketModel = require('../models/ticketModel');
 const { STATUS } = TicketModel;
 
@@ -2291,6 +2440,7 @@ exports.createTicket = async (req, res) => {
 
   try {
     if (timeslot_id) {
+      // 1. เช็คว่ามีรอบเวลานี้อยู่จริง และเช็คจำนวนที่ว่าง (Capacity)
       const availability = await TicketModel.getSlotAvailability(timeslot_id);
       if (!availability) {
         return res.status(404).json({ success: false, message: 'Time slot not found.' });
@@ -2308,8 +2458,54 @@ exports.createTicket = async (req, res) => {
           message: `Only ${remaining} spot${remaining === 1 ? '' : 's'} left in this slot.`
         });
       }
+
+      // ==========================================
+      // 🚀 2. ส่วนที่เพิ่มใหม่: เช็คเวลาทับซ้อน (Overlapping Booking)
+      // ==========================================
+      // 2.1 ดึงเวลาเริ่มและจบของ timeslot ที่ลูกค้าเลือกมาเปรียบเทียบ
+      const slotInfo = await pool.query(
+        'SELECT start_time, end_time FROM time_slot WHERE timeslot_id = $1',
+        [timeslot_id]
+      );
+
+      if (slotInfo.rows.length > 0) {
+        const { start_time, end_time } = slotInfo.rows[0];
+
+        // 2.2 Query เช็คว่า "ลูกค้ารายนี้" มีการจองคิวในวันเดียวกันที่เวลาทับซ้อนกันหรือไม่
+        const overlapQuery = `
+          SELECT t.ticket_id
+          FROM ticket t
+          JOIN queue q ON q.queue_id = t.queue_id
+          JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+          WHERE t.customer_id = $1
+            AND q.date = $2
+            AND t.status_id NOT IN ($5, $6) -- ยกเว้นคิวที่ถูกยกเลิก (4) หรือเสร็จสิ้นไปแล้ว (3)
+            AND ts.start_time < $4 -- เวลาเริ่มของคิวเดิม < เวลาจบของคิวใหม่
+            AND ts.end_time > $3   -- เวลาจบของคิวเดิม > เวลาเริ่มของคิวใหม่
+        `;
+        const overlapValues = [
+          customer_id, 
+          availability.date, 
+          start_time, 
+          end_time, 
+          STATUS.CANCELLED, 
+          STATUS.COMPLETED
+        ];
+        
+        const { rows: overlapRows } = await pool.query(overlapQuery, overlapValues);
+
+        // ถ้า Query แล้วเจอข้อมูล แปลว่าเวลาทับซ้อน ให้ตีกลับทันที
+        if (overlapRows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            message: 'คุณมีการจองคิวในช่วงเวลานี้อยู่แล้ว (เวลาทับซ้อนกัน) กรุณาเลือกเวลาอื่นครับ'
+          });
+        }
+      }
+      // ==========================================
     }
 
+    // 3. ถ้าเวลาไม่ทับซ้อนและมีที่ว่าง ก็ทำการสร้างคิวตามปกติ
     const queueId = await TicketModel.findOrCreateTodayQueue(business_id);
     const queueNumber = await TicketModel.nextQueueNumber(queueId);
 
@@ -2896,10 +3092,14 @@ export default function MyTickets() {
                 {/* ข้อมูลร้าน */}
                 <div className="w-full sm:w-auto flex-1 text-center sm:text-left">
                   <h3 className="font-bold text-slate-800 dark:text-white text-lg">{t.business_name}</h3>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Date: {t.date}</p>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm">
-                    Time: {t.start_time === '-' ? 'Walk-in (no set time)' : `${t.start_time.slice(0, 5)} - ${t.end_time.slice(0, 5)}`}
+                  
+                  {/* 🚀 บรรทัดที่แก้: รวมวันที่และเวลาไว้ด้วยกัน และลบบรรทัด Time เดิมออก */}
+                  <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                    Reserved for: {t.date ? new Date(t.date).toLocaleDateString('en-GB') : '-'}
+                    {' '}at{' '}
+                    {t.start_time === '-' ? 'Walk-in' : `${t.start_time.slice(0, 5)} - ${t.end_time.slice(0, 5)}`}
                   </p>
+                  
                   {Number(t.amount_paid) > 0 && <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold text-teal-600 dark:text-teal-400 mt-1">Deposit paid: ฿{t.amount_paid}</p>}
                 </div>
 
@@ -3021,6 +3221,47 @@ export default function App() {
       </Routes>
     </BrowserRouter>
   );
+}
+</file>
+
+<file path="App/frontend/package.json">
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-oauth/google": "^0.13.5",
+    "@tailwindcss/vite": "^4.3.3",
+    "html5-qrcode": "^2.3.8",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
+    "recharts": "^3.10.1",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@eslint/js": "^10.0.1",
+    "@rolldown/plugin-babel": "^0.2.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "eslint": "^10.6.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.7.0",
+    "vite": "^8.1.1"
+  }
 }
 </file>
 
@@ -4309,13 +4550,11 @@ export default function OwnerHome() {
         />
       )}
 
-      {/* เรียกใช้งาน QR Scanner Modal */}
-      {showScanner && (
-        <QRScannerModal 
-          onClose={() => setShowScanner(false)} 
-          onScanSuccess={handleScanSuccess} 
-        />
-      )}
+      <QRScannerModal 
+        isOpen={showScanner}
+        onClose={() => setShowScanner(false)}
+        onScanSuccess={handleScanSuccess}
+      />
     </div>
   );
 }
