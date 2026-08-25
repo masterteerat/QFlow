@@ -6,12 +6,19 @@ const STATUS = { WAITING: 1, SERVING: 2, COMPLETED: 3, CANCELLED: 4 };
 const TicketModel = {
   STATUS,
 
-  isSlotTaken: async (timeslotId) => {
+  getSlotAvailability: async (timeslotId) => {
     const result = await pool.query(
-      `SELECT ticket_id FROM ticket WHERE timeslot_id = $1 AND status_id <> $2`,
+      `SELECT
+        ts.date,
+        ts.max_capacity,
+        COALESCE(SUM(t.pax), 0) AS booked_pax
+      FROM time_slot ts
+      LEFT JOIN ticket t ON t.timeslot_id = ts.timeslot_id AND t.status_id <> $2
+      WHERE ts.timeslot_id = $1
+      GROUP BY ts.date, ts.max_capacity`,
       [timeslotId, STATUS.CANCELLED]
     );
-    return result.rows.length > 0;
+    return result.rows[0];
   },
 
   // One queue per business per day. Reuses today's row if it already exists.
@@ -34,12 +41,12 @@ const TicketModel = {
     return `A${String(result.rows[0].next_number).padStart(3, '0')}`;
   },
 
-  create: async ({ queueNumber, customerId, queueId, timeslotId }) => {
+  create: async ({ queueNumber, customerId, queueId, timeslotId, pax }) => {
     const result = await pool.query(
-      `INSERT INTO ticket (queue_number, customer_id, queue_id, timeslot_id, status_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [queueNumber, customerId, queueId, timeslotId, STATUS.WAITING]
+      `INSERT INTO ticket (queue_number, customer_id, queue_id, timeslot_id, status_id, pax)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *`,
+       [queueNumber, customerId, queueId, timeslotId, STATUS.WAITING, pax]
     );
     return result.rows[0];
   },
@@ -54,8 +61,9 @@ const TicketModel = {
   findFullTicket: async (ticketId) => {
     const query = `
       SELECT
-        t.ticket_id, t.queue_number, t.created_at,
-        b.business_name, q.date,
+         t.ticket_id, t.queue_number, t.created_at,
+         t.pax,
+         b.business_name, q.date,
         COALESCE(ts.start_time::text, '-') AS start_time,
         COALESCE(ts.end_time::text, '-') AS end_time,
         st.status_name
@@ -73,8 +81,8 @@ const TicketModel = {
   findByCustomer: async (customerId) => {
     const query = `
       SELECT
-        t.ticket_id, t.queue_number, t.created_at, t.status_id,
-        b.business_id, b.business_name, q.date,
+         t.ticket_id, t.queue_number, t.created_at, t.status_id, t.pax,
+         b.business_id, b.business_name, q.date,
         COALESCE(ts.start_time::text, '-') AS start_time,
         COALESCE(ts.end_time::text, '-') AS end_time,
         st.status_name,

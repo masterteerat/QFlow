@@ -10,6 +10,8 @@ router.post('/login', auth.login);
 
 router.get('/businesses/:ownerId', business.getMyBusinesses);
 router.post('/businesses', business.createBusiness);
+router.get('/businesses/:businessId/schedule', business.getSchedule);
+router.put('/businesses/:businessId/schedule', business.updateSchedule);
 
 router.get('/queue/:businessId', ticket.getQueueList);
 router.patch('/tickets/:ticketId/checkin', ticket.checkInTicket);

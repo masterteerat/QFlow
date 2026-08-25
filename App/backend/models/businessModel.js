@@ -19,17 +19,21 @@ const BusinessModel = {
               'date', ts.date,
               'start_time', ts.start_time,
               'end_time', ts.end_time,
-              'is_booked', booked.timeslot_id IS NOT NULL
+              'max_capacity', ts.max_capacity,
+           'remaining', ts.max_capacity - COALESCE(booked.total_pax, 0),
+           'is_booked', (ts.max_capacity - COALESCE(booked.total_pax, 0)) <= 0
             )
           ) FILTER (WHERE ts.timeslot_id IS NOT NULL),
           '[]'
         ) AS time_slots
       FROM business b
       LEFT JOIN time_slot ts ON ts.business_id = b.business_id
+        AND ts.date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '13 days'
       LEFT JOIN category c ON c.category_id = b.category_id
       LEFT JOIN (
-        SELECT DISTINCT timeslot_id FROM ticket
+        SELECT timeslot_id, SUM(pax) AS total_pax FROM ticket
         WHERE timeslot_id IS NOT NULL AND status_id <> 4
+        GROUP BY timeslot_id
       ) booked ON booked.timeslot_id = ts.timeslot_id
       GROUP BY b.business_id, c.category_id, c.name
       ORDER BY b.business_id ASC;
@@ -78,20 +82,71 @@ const BusinessModel = {
   },
 
   addTimeSlots: async (client, businessId, slots) => {
+    // Stamp the daily template across the next 14 days (today through +13 days)
+    const dates = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date();
+      // สร้างวันที่โดยอิงจาก Local Time ปัจจุบันบวกด้วยจำนวนวัน
+      d.setDate(d.getDate() + i);
+      
+      // ดึงค่า ปี-เดือน-วัน ออกมาและต่อ String เอง
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      
+      dates.push(`${year}-${month}-${day}`);
+    }
+
     const values = [];
-    const rows = slots.map((slot, i) => {
-      const base = i * 4;
-      values.push(businessId, slot.date, slot.start_time, slot.end_time);
-      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`;
-    });
+    let paramIdx = 1;
+    const rows = [];
+
+    for (const date of dates) {
+      for (const slot of slots) {
+        const base = paramIdx - 1;
+        values.push(businessId, date, slot.start_time, slot.end_time, slot.max_capacity || 1);
+        rows.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`);
+        paramIdx += 5;
+      }
+    }
 
     const result = await client.query(
-      `INSERT INTO time_slot (business_id, date, start_time, end_time)
-       VALUES ${rows.join(', ')}
-       RETURNING *`,
+      `INSERT INTO time_slot (business_id, date, start_time, end_time, max_capacity)
+        VALUES ${rows.join(', ')}
+        RETURNING *`,
       values
     );
     return result.rows;
+  },
+
+  // Current daily template — dedupe by time since every day repeats the same blocks
+  getSchedule: async (businessId) => {
+    const result = await pool.query(
+      `SELECT DISTINCT start_time, end_time, max_capacity
+       FROM time_slot
+       WHERE business_id = $1 AND date >= CURRENT_DATE
+       ORDER BY start_time ASC`,
+      [businessId]
+    );
+    return result.rows;
+  },
+
+  // Replaces the daily template for the whole shop, re-stamping the next 14 days.
+  // Slots that already have a booking are left alone — never deleted out from
+  // under a customer who already reserved them.
+  updateSchedule: async (client, businessId, slots) => {
+    await client.query(
+      `DELETE FROM time_slot
+       WHERE business_id = $1
+         AND date >= CURRENT_DATE
+         AND timeslot_id NOT IN (
+           SELECT timeslot_id FROM ticket WHERE timeslot_id IS NOT NULL
+         )`,
+      [businessId]
+    );
+
+    if (slots.length === 0) return [];
+    return BusinessModel.addTimeSlots(client, businessId, slots);
   }
 };
 

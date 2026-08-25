@@ -45,6 +45,7 @@ function validateNewBusiness({ business_name, is_deposit, deposit_amount, queue_
     for (const slot of time_slots) {
       if (!slot.date || !slot.start_time || !slot.end_time) return 'Time slot details are incomplete.';
       if (slot.start_time >= slot.end_time) return 'Start time must be before end time for every slot.';
+      if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each time slot needs a max capacity of at least 1.';
     }
   }
   return null;
@@ -89,6 +90,47 @@ exports.createBusiness = async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Create business error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+};
+
+exports.getSchedule = async (req, res) => {
+  try {
+    const schedule = await BusinessModel.getSchedule(req.params.businessId);
+    res.json({ success: true, data: schedule });
+  } catch (error) {
+    console.error('Get schedule error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+exports.updateSchedule = async (req, res) => {
+  const { businessId } = req.params;
+  const { time_slots = [] } = req.body;
+
+  for (const slot of time_slots) {
+    if (!slot.start_time || !slot.end_time) {
+      return res.status(400).json({ success: false, message: 'Time slot details are incomplete.' });
+    }
+    if (slot.start_time >= slot.end_time) {
+      return res.status(400).json({ success: false, message: 'Start time must be before end time for every slot.' });
+    }
+    if (!slot.max_capacity || Number(slot.max_capacity) < 1) {
+      return res.status(400).json({ success: false, message: 'Each time slot needs a max capacity of at least 1.' });
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const updatedSlots = await BusinessModel.updateSchedule(client, businessId, time_slots);
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Schedule updated.', data: updatedSlots });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update schedule error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   } finally {
     client.release();

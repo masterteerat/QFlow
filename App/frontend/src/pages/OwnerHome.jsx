@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import RegisterBusinessModal from './RegisterBusinessModal';
+import EditScheduleModal from './EditScheduleModal';
 import { api } from '../lib/api';
 import { getOwner } from '../lib/auth';
 
@@ -15,6 +16,7 @@ export default function OwnerHome() {
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showEditScheduleModal, setShowEditScheduleModal] = useState(false);
 
   const owner = getOwner();
 
@@ -132,10 +134,20 @@ export default function OwnerHome() {
             </button>
 
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
-              <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">{selectedShop.business_name}</h2>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">
-                {selectedShop.is_deposit ? `Deposit: ฿${selectedShop.deposit_amount}` : 'No deposit required'}
-              </p>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">{selectedShop.business_name}</h2>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    {selectedShop.is_deposit ? `Deposit: ฿${selectedShop.deposit_amount}` : 'No deposit required'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowEditScheduleModal(true)}
+                  className="text-sm font-semibold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 border border-teal-200 dark:border-teal-800 px-3 py-1.5 rounded-lg"
+                >
+                  Edit schedule
+                </button>
+              </div>
             </div>
 
             {loadingQueue && <p className="text-slate-500 dark:text-slate-400 mb-4">Loading queue...</p>}
@@ -220,6 +232,17 @@ export default function OwnerHome() {
           onClose={() => setShowRegisterModal(false)}
           onSuccess={() => {
             setShowRegisterModal(false);
+            fetchMyShops();
+          }}
+        />
+      )}
+
+      {showEditScheduleModal && (
+        <EditScheduleModal
+          businessId={selectedShop.business_id}
+          onClose={() => setShowEditScheduleModal(false)}
+          onSuccess={() => {
+            setShowEditScheduleModal(false);
             fetchMyShops();
           }}
         />

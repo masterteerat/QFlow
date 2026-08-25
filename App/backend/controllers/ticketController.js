@@ -3,12 +3,33 @@ const { STATUS } = TicketModel;
 
 // POST /api/customer/tickets - book a slot, or take a walk-in ticket
 exports.createTicket = async (req, res) => {
-  const { customer_id, business_id, timeslot_id = null, amount_paid = 0 } = req.body;
+  const { customer_id, business_id, timeslot_id = null, amount_paid = 0, pax = 1 } = req.body;
+
+  const paxNum = Number(pax);
+  if (!Number.isInteger(paxNum) || paxNum < 1) {
+    return res.status(400).json({ success: false, message: 'Party size must be at least 1.' });
+  }
 
   try {
-    // Re-check on the server too, in case two people book the same slot at once
-    if (timeslot_id && (await TicketModel.isSlotTaken(timeslot_id))) {
-      return res.status(409).json({ success: false, message: 'This time slot was booked. Pick another.' });
+    // Re-check capacity on the server too, in case two people book at once
+    if (timeslot_id) {
+      const availability = await TicketModel.getSlotAvailability(timeslot_id);
+      if (!availability) {
+        return res.status(404).json({ success: false, message: 'Time slot not found.' });
+      }
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const maxDate = new Date(today); maxDate.setDate(maxDate.getDate() + 13);
+      const slotDate = new Date(availability.date);
+      if (slotDate < today || slotDate > maxDate) {
+        return res.status(400).json({ success: false, message: 'This time slot is outside the bookable window.' });
+      }
+      const remaining = availability.max_capacity - Number(availability.booked_pax);
+      if (paxNum > remaining) {
+        return res.status(409).json({
+          success: false,
+          message: `Only ${remaining} spot${remaining === 1 ? '' : 's'} left in this slot.`
+        });
+      }
     }
 
     const queueId = await TicketModel.findOrCreateTodayQueue(business_id);
@@ -18,7 +39,8 @@ exports.createTicket = async (req, res) => {
       queueNumber,
       customerId: customer_id,
       queueId,
-      timeslotId: timeslot_id
+      timeslotId: timeslot_id,
+      pax: paxNum
     });
 
     if (amount_paid > 0) {

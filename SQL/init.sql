@@ -79,6 +79,7 @@ CREATE TABLE time_slot (
     date        DATE NOT NULL,
     start_time  TIME NOT NULL,
     end_time    TIME NOT NULL,
+    max_capacity INT NOT NULL DEFAULT 1,
     business_id INT REFERENCES business(business_id) ON DELETE CASCADE
 );
 
@@ -89,6 +90,7 @@ CREATE TABLE ticket (
     timeslot_id  INT REFERENCES time_slot(timeslot_id),
     customer_id  INT REFERENCES customer(customer_id) ON DELETE CASCADE,
     status_id    INT DEFAULT 1 REFERENCES ticket_status(status_id),
+    pax          INT NOT NULL DEFAULT 1,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 let tempIdCounter = 0;
 const nextTempId = () => `slot-${++tempIdCounter}-${Date.now()}`;
 
-const emptySlot = () => ({ tempId: nextTempId(), date: '', start_time: '', end_time: '' });
+const emptySlot = () => ({ tempId: nextTempId(), start_time: '', end_time: '', max_capacity: 1 });
 
 export default function RegisterBusinessModal({ ownerId, onClose, onSuccess }) {
   const [businessName, setBusinessName] = useState('');
@@ -27,8 +27,9 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess }) {
     if (isDeposit && (!depositAmount || Number(depositAmount) <= 0)) return 'Please enter a valid deposit amount.';
     if (queueType === 'timeslot') {
       for (const slot of timeSlots) {
-        if (!slot.date || !slot.start_time || !slot.end_time) return 'Please fill in every time slot.';
+        if (!slot.start_time || !slot.end_time) return 'Please fill in every time slot.';
         if (slot.start_time >= slot.end_time) return 'Start time must be before end time.';
+        if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each slot needs a max capacity of at least 1.';
       }
     }
     return '';
@@ -48,7 +49,7 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess }) {
         is_deposit: isDeposit,
         deposit_amount: isDeposit ? Number(depositAmount) : 0,
         queue_type: queueType,
-        time_slots: queueType === 'timeslot' ? timeSlots.map(({ date, start_time, end_time }) => ({ date, start_time, end_time })) : []
+        time_slots: queueType === 'timeslot' ? timeSlots.map(({ start_time, end_time, max_capacity }) => ({ start_time, end_time, max_capacity: Number(max_capacity) })) : []
       });
 
       if (result.success) {
@@ -167,16 +168,16 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess }) {
                 {timeSlots.map((slot) => (
                   <div key={slot.tempId} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
                     <div className="flex-1">
-                      <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Date</label>
-                      <input type="date" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.date} onChange={(e) => updateSlot(slot.tempId, 'date', e.target.value)} />
-                    </div>
-                    <div className="flex-1">
                       <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Start time</label>
                       <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.start_time} onChange={(e) => updateSlot(slot.tempId, 'start_time', e.target.value)} />
                     </div>
                     <div className="flex-1">
                       <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">End time</label>
                       <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.end_time} onChange={(e) => updateSlot(slot.tempId, 'end_time', e.target.value)} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Max people</label>
+                      <input type="number" min="1" step="1" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.max_capacity} onChange={(e) => updateSlot(slot.tempId, 'max_capacity', e.target.value)} />
                     </div>
                     <button
                       type="button"

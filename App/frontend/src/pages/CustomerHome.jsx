@@ -4,11 +4,32 @@ import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
 
+// Normalize a date value (may come back as "2026-07-28" or a full ISO timestamp) to "YYYY-MM-DD"
+const toDateKey = (d) => String(d).slice(0, 10);
+
+// Friendly label for a date chip: Today / Tomorrow / "Wed 27"
+const formatDateLabel = (dateKey) => {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((date - today) / 86400000);
+
+  if (diffDays === 0) return { top: 'Today', bottom: `${date.getDate()}/${date.getMonth() + 1}` };
+  if (diffDays === 1) return { top: 'Tomorrow', bottom: `${date.getDate()}/${date.getMonth() + 1}` };
+  return {
+    top: date.toLocaleDateString('en-US', { weekday: 'short' }),
+    bottom: `${date.getDate()}/${date.getMonth() + 1}`
+  };
+};
+
 export default function CustomerHome() {
   const [businesses, setBusinesses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlots, setSelectedSlots] = useState({});
+  const [selectedDates, setSelectedDates] = useState({}); // { [businessId]: 'YYYY-MM-DD' }
+  const [paxByBusiness, setPaxByBusiness] = useState({});
 
   // States สำหรับ Search และ Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,28 +86,53 @@ export default function CustomerHome() {
     setCategoryFilter('all');
   };
 
+  // เปลี่ยนวันที่ที่เลือกดูของร้านนั้น -> เคลียร์ slot ที่เลือกไว้ เพราะเป็นคนละวันแล้ว
+  const handleSelectDate = (businessId, dateKey) => {
+    setSelectedDates((prev) => ({ ...prev, [businessId]: dateKey }));
+    setSelectedSlots((prev) => {
+      const next = { ...prev };
+      delete next[businessId];
+      return next;
+    });
+  };
+
   const handleSelectSlot = (businessId, slot) => {
     if (slot.is_booked) return;
     setSelectedSlots((prev) => ({ ...prev, [businessId]: slot.timeslot_id }));
+    // ถ้าจำนวนคนที่ตั้งไว้เดิมเกินที่นั่งที่เหลือของ slot นี้ ให้หดลงมาให้พอดีอัตโนมัติ
+    setPaxByBusiness((prev) => {
+      const current = prev[businessId] || 1;
+      const clamped = Math.max(1, Math.min(current, slot.remaining));
+      return { ...prev, [businessId]: clamped };
+    });
   };
 
   const handleStartBooking = (business) => {
     const isWalkin = business.time_slots.length === 0;
     const slotId = selectedSlots[business.business_id] || null;
+    const pax = paxByBusiness[business.business_id] || 1;
 
     if (!isWalkin && !slotId) {
       alert('Please pick a time slot first.');
       return;
     }
 
+    if (!isWalkin) {
+      const slot = business.time_slots.find((s) => s.timeslot_id === slotId);
+      if (slot && pax > slot.remaining) {
+        alert(`Only ${slot.remaining} spot${slot.remaining === 1 ? '' : 's'} left in this slot.`);
+        return;
+      }
+    }
+
     if (business.is_deposit && Number(business.deposit_amount) > 0) {
-      setPaymentModal({ business, slotId, amount: business.deposit_amount });
+      setPaymentModal({ business, slotId, amount: business.deposit_amount, pax });
     } else {
-      submitBooking(business.business_id, slotId, 0);
+      submitBooking(business.business_id, slotId, 0, pax);
     }
   };
 
-  const submitBooking = async (businessId, timeslotId, amountPaid) => {
+  const submitBooking = async (businessId, timeslotId, amountPaid, pax) => {
     if (!customer?.id) {
       alert('Please log in again.');
       return;
@@ -98,7 +144,8 @@ export default function CustomerHome() {
         customer_id: customer.id,
         business_id: businessId,
         timeslot_id: timeslotId,
-        amount_paid: amountPaid
+        amount_paid: amountPaid,
+        pax
       });
 
       if (result.success) {
@@ -343,7 +390,25 @@ export default function CustomerHome() {
           <div className="grid gap-5 mt-2">
             {filteredBusinesses.map((b) => {
               const isWalkin = b.time_slots.length === 0;
-              const allSlotsBooked = !isWalkin && b.time_slots.every((s) => s.is_booked);
+
+              // วันที่ทั้งหมดที่มี slot จริง เรียงจากใกล้สุดไปไกลสุด ไม่ซ้ำกัน
+              const availableDates = isWalkin
+                ? []
+                : [...new Set(b.time_slots.map((s) => toDateKey(s.date)))].sort();
+
+              const selectedDate = selectedDates[b.business_id] || availableDates[0];
+              const slotsForDate = isWalkin
+                ? []
+                : b.time_slots.filter((s) => toDateKey(s.date) === selectedDate);
+
+              const allSlotsBookedForDate = !isWalkin && slotsForDate.length > 0 && slotsForDate.every((s) => s.is_booked);
+
+              // slot ที่กำลังเลือกอยู่ตอนนี้ (ใช้กำหนดเพดานจำนวนคน)
+              const selectedSlotObj = !isWalkin
+                ? b.time_slots.find((s) => s.timeslot_id === selectedSlots[b.business_id])
+                : null;
+              const maxPax = selectedSlotObj ? selectedSlotObj.remaining : null; // null = ไม่จำกัด (walk-in)
+              const currentPax = paxByBusiness[b.business_id] || 1;
 
               return (
                 <div key={b.business_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow">
@@ -361,10 +426,39 @@ export default function CustomerHome() {
                     )}
                   </div>
 
-                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-5 mb-2">Available times</h4>
+                  {!isWalkin && (
+                    <>
+                      {/* --- Date picker: เลือกวันก่อน แล้วค่อยเลือกเวลาของวันนั้น --- */}
+                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-5 mb-2">Pick a date</h4>
+                      <div className="flex gap-2 flex-wrap">
+                        {availableDates.map((dateKey) => {
+                          const label = formatDateLabel(dateKey);
+                          const isActive = dateKey === selectedDate;
+                          return (
+                            <button
+                              key={dateKey}
+                              onClick={() => handleSelectDate(b.business_id, dateKey)}
+                              className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-semibold border min-w-[56px] transition-colors ${
+                                isActive
+                                  ? 'bg-teal-700 dark:bg-teal-600 border-teal-700 dark:border-teal-600 text-white'
+                                  : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-teal-400'
+                              }`}
+                            >
+                              <span>{label.top}</span>
+                              <span className={isActive ? 'text-teal-100' : 'text-slate-400 dark:text-slate-500'}>{label.bottom}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-2">
+                    {isWalkin ? 'Available times' : 'Available times on this date'}
+                  </h4>
                   <div className="flex gap-2 flex-wrap">
                     {!isWalkin ? (
-                      b.time_slots.map((slot) => {
+                      slotsForDate.map((slot) => {
                         const isSelected = selectedSlots[b.business_id] === slot.timeslot_id;
                         return (
                           <button
@@ -380,8 +474,8 @@ export default function CustomerHome() {
                                 : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-teal-400'
                             }`}
                           >
-                            {slot.date} ({slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)})
-                            {slot.is_booked ? ' - full' : ''}
+                            {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)}
+                            {slot.is_booked ? ' - full' : ` - ${slot.remaining} left`}
                           </button>
                         );
                       })
@@ -391,16 +485,41 @@ export default function CustomerHome() {
                         Walk-in only - take a ticket immediately
                       </span>
                     )}
-                  </div>
+                   </div>
 
-                  <button
+                   <div className="mt-3 flex items-center gap-2">
+                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                       People{maxPax !== null ? ` (max ${maxPax} left)` : ''}:
+                     </span>
+                     <button
+                       type="button"
+                       onClick={() => setPaxByBusiness((p) => ({ ...p, [b.business_id]: Math.max(1, (p[b.business_id] || 1) - 1) }))}
+                       className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold"
+                     >
+                       −
+                     </button>
+                     <span className="w-6 text-center font-bold text-slate-800 dark:text-white">{currentPax}</span>
+                     <button
+                       type="button"
+                       disabled={maxPax !== null && currentPax >= maxPax}
+                       onClick={() => setPaxByBusiness((p) => {
+                         const next = (p[b.business_id] || 1) + 1;
+                         return { ...p, [b.business_id]: maxPax !== null ? Math.min(next, maxPax) : next };
+                       })}
+                       className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                     >
+                       +
+                     </button>
+                   </div>
+
+                   <button
                     onClick={() => handleStartBooking(b)}
-                    disabled={allSlotsBooked}
+                    disabled={!isWalkin && allSlotsBookedForDate}
                     className={`mt-5 w-full sm:w-auto px-6 py-2.5 rounded-lg font-bold text-white transition-colors shadow-sm ${
-                      allSlotsBooked ? 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed' : 'bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-700'
+                      (!isWalkin && allSlotsBookedForDate) ? 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed' : 'bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-700'
                     }`}
                   >
-                    {allSlotsBooked ? 'Fully booked' : isWalkin ? 'Take a ticket' : 'Confirm booking'}
+                    {(!isWalkin && allSlotsBookedForDate) ? 'Fully booked on this date' : isWalkin ? 'Take a ticket' : 'Confirm booking'}
                   </button>
                 </div>
               );
@@ -438,7 +557,7 @@ export default function CustomerHome() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => submitBooking(paymentModal.business.business_id, paymentModal.slotId, paymentModal.amount)}
+                  onClick={() => submitBooking(paymentModal.business.business_id, paymentModal.slotId, paymentModal.amount, paymentModal.pax)}
                   disabled={submitting}
                   className="flex-1 py-2.5 bg-teal-700 dark:bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors shadow-sm"
                 >
