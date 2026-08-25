@@ -95,8 +95,6 @@ export default function CustomerLogin() {
           >
             🚀 Quick Login (Test Customer)
           </button>
-
-          {/* แก้ไขให้เหลือเส้นคั่น "Or" แค่จุดเดียว */}
           <div className="mt-4 flex flex-col items-center gap-3">
             <div className="relative flex items-center py-2 w-full">
               <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
@@ -108,6 +106,7 @@ export default function CustomerLogin() {
               onSuccess={handleGoogleSuccess}
               onError={() => setError('Google Login Failed')}
               useOneTap={false}
+              locale="en"
             />
           </div>
         </form>
