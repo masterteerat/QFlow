@@ -20,9 +20,10 @@ const BusinessModel = {
               'start_time', ts.start_time,
               'end_time', ts.end_time,
               'max_capacity', ts.max_capacity,
-           'remaining', ts.max_capacity - COALESCE(booked.total_pax, 0),
-           'is_booked', (ts.max_capacity - COALESCE(booked.total_pax, 0)) <= 0
+              'remaining', ts.max_capacity - COALESCE(booked.total_pax, 0),
+              'is_booked', (ts.max_capacity - COALESCE(booked.total_pax, 0)) <= 0
             )
+            ORDER BY ts.date ASC, ts.start_time ASC
           ) FILTER (WHERE ts.timeslot_id IS NOT NULL),
           '[]'
         ) AS time_slots
@@ -86,14 +87,10 @@ const BusinessModel = {
     const dates = [];
     for (let i = 0; i < 14; i++) {
       const d = new Date();
-      // สร้างวันที่โดยอิงจาก Local Time ปัจจุบันบวกด้วยจำนวนวัน
       d.setDate(d.getDate() + i);
-      
-      // ดึงค่า ปี-เดือน-วัน ออกมาและต่อ String เอง
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
-      
       dates.push(`${year}-${month}-${day}`);
     }
 
@@ -120,6 +117,7 @@ const BusinessModel = {
   },
 
   // Current daily template — dedupe by time since every day repeats the same blocks
+  // 🟢 ORDER BY start_time เดิมมีอยู่แล้ว ใช้งานถูกต้อง
   getSchedule: async (businessId) => {
     const result = await pool.query(
       `SELECT DISTINCT start_time, end_time, max_capacity

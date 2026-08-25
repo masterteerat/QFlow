@@ -113,289 +113,6 @@ README.md
 <files>
 This section contains the contents of the repository's files.
 
-<file path="App/frontend/src/pages/EditScheduleModal.jsx">
-import { useState, useEffect } from 'react';
-import { api } from '../lib/api';
-
-let tempIdCounter = 0;
-const nextTempId = () => `slot-${++tempIdCounter}-${Date.now()}`;
-const emptySlot = () => ({ tempId: nextTempId(), start_time: '', end_time: '', max_capacity: 1 });
-
-export default function EditScheduleModal({ businessId, onClose, onSuccess }) {
-  const [timeSlots, setTimeSlots] = useState([emptySlot()]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    api.get(`/owner/businesses/${businessId}/schedule`).then((res) => {
-      if (res.success && res.data.length > 0) {
-        setTimeSlots(res.data.map((s) => ({
-          tempId: nextTempId(),
-          start_time: s.start_time.slice(0, 5),
-          end_time: s.end_time.slice(0, 5),
-          max_capacity: s.max_capacity
-        })));
-      }
-      setLoading(false);
-    }).catch(() => { setError('Could not load current schedule.'); setLoading(false); });
-  }, [businessId]);
-
-  const updateSlot = (tempId, field, value) => {
-    setTimeSlots((prev) => prev.map((s) => (s.tempId === tempId ? { ...s, [field]: value } : s)));
-  };
-  const addSlot = () => setTimeSlots((prev) => [...prev, emptySlot()]);
-  const removeSlot = (tempId) => setTimeSlots((prev) => (prev.length === 1 ? prev : prev.filter((s) => s.tempId !== tempId)));
-
-  const validate = () => {
-    for (const slot of timeSlots) {
-      if (!slot.start_time || !slot.end_time) return 'Please fill in every time slot.';
-      if (slot.start_time >= slot.end_time) return 'Start time must be before end time.';
-      if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each slot needs a max capacity of at least 1.';
-    }
-    return '';
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const validationError = validate();
-    if (validationError) return setError(validationError);
-
-    setError('');
-    setSubmitting(true);
-    try {
-      const result = await api.put(`/owner/businesses/${businessId}/schedule`, {
-        time_slots: timeSlots.map(({ start_time, end_time, max_capacity }) => ({ start_time, end_time, max_capacity: Number(max_capacity) }))
-      });
-      if (result.success) {
-        onSuccess();
-      } else {
-        setError(result.message || 'Something went wrong. Please try again.');
-      }
-    } catch {
-      setError('Could not reach the server.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-800 rounded-t-xl">
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white">Edit daily schedule</h2>
-          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl leading-none" aria-label="Close">
-            &times;
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="p-8 text-center text-slate-500 dark:text-slate-400">Loading current schedule...</div>
-        ) : (
-          <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
-            {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              Changes apply to the next 14 days. Slots that already have a booking are kept as-is.
-            </p>
-
-            <div className="flex justify-between items-center">
-              <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold">Daily time blocks</label>
-              <button type="button" onClick={addSlot} className="text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 text-sm font-semibold">
-                + Add block
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {timeSlots.map((slot) => (
-                <div key={slot.tempId} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
-                  <div className="flex-1">
-                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Start time</label>
-                    <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.start_time} onChange={(e) => updateSlot(slot.tempId, 'start_time', e.target.value)} />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">End time</label>
-                    <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.end_time} onChange={(e) => updateSlot(slot.tempId, 'end_time', e.target.value)} />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Max people</label>
-                    <input type="number" min="1" step="1" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.max_capacity} onChange={(e) => updateSlot(slot.tempId, 'max_capacity', e.target.value)} />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeSlot(slot.tempId)}
-                    disabled={timeSlots.length === 1}
-                    className="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 disabled:text-slate-300 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-sm font-semibold px-2 py-2"
-                    title={timeSlots.length === 1 ? 'At least one block is required' : 'Remove this block'}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-3 mt-2">
-              <button type="button" onClick={onClose} disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600">
-                Cancel
-              </button>
-              <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-teal-700 dark:bg-teal-600 text-white hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors disabled:opacity-60">
-                {submitting ? 'Saving...' : 'Save schedule'}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="App/backend/models/ticketModel.js">
-const pool = require('../config/db');
-
-// Status ids, matching ticket_status seed data
-const STATUS = { WAITING: 1, SERVING: 2, COMPLETED: 3, CANCELLED: 4 };
-
-const TicketModel = {
-  STATUS,
-
-  getSlotAvailability: async (timeslotId) => {
-    const result = await pool.query(
-      `SELECT
-        ts.date,
-        ts.max_capacity,
-        COALESCE(SUM(t.pax), 0) AS booked_pax
-      FROM time_slot ts
-      LEFT JOIN ticket t ON t.timeslot_id = ts.timeslot_id AND t.status_id <> $2
-      WHERE ts.timeslot_id = $1
-      GROUP BY ts.date, ts.max_capacity`,
-      [timeslotId, STATUS.CANCELLED]
-    );
-    return result.rows[0];
-  },
-
-  // One queue per business per day. Reuses today's row if it already exists.
-  findOrCreateTodayQueue: async (businessId) => {
-    const result = await pool.query(
-      `INSERT INTO queue (date, business_id)
-       VALUES (CURRENT_DATE, $1)
-       ON CONFLICT (date, business_id) DO UPDATE SET business_id = EXCLUDED.business_id
-       RETURNING queue_id`,
-      [businessId]
-    );
-    return result.rows[0].queue_id;
-  },
-
-  nextQueueNumber: async (queueId) => {
-    const result = await pool.query(
-      `SELECT COUNT(*) + 1 AS next_number FROM ticket WHERE queue_id = $1`,
-      [queueId]
-    );
-    return `A${String(result.rows[0].next_number).padStart(3, '0')}`;
-  },
-
-  create: async ({ queueNumber, customerId, queueId, timeslotId, pax }) => {
-    const result = await pool.query(
-      `INSERT INTO ticket (queue_number, customer_id, queue_id, timeslot_id, status_id, pax)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *`,
-       [queueNumber, customerId, queueId, timeslotId, STATUS.WAITING, pax]
-    );
-    return result.rows[0];
-  },
-
-  addDepositPayment: async (ticketId, amount) => {
-    await pool.query(
-      `INSERT INTO payment (ticket_id, amount, status_id) VALUES ($1, $2, 2)`,
-      [ticketId, amount]
-    );
-  },
-
-  findFullTicket: async (ticketId) => {
-    const query = `
-      SELECT
-         t.ticket_id, t.queue_number, t.created_at,
-         t.pax,
-         b.business_name, q.date,
-        COALESCE(ts.start_time::text, '-') AS start_time,
-        COALESCE(ts.end_time::text, '-') AS end_time,
-        st.status_name
-      FROM ticket t
-      JOIN queue q ON q.queue_id = t.queue_id
-      JOIN business b ON b.business_id = q.business_id
-      JOIN ticket_status st ON st.status_id = t.status_id
-      LEFT JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
-      WHERE t.ticket_id = $1
-    `;
-    const result = await pool.query(query, [ticketId]);
-    return result.rows[0];
-  },
-
-  findByCustomer: async (customerId) => {
-    const query = `
-      SELECT
-         t.ticket_id, t.queue_number, t.created_at, t.status_id, t.pax,
-         b.business_id, b.business_name, q.date,
-        COALESCE(ts.start_time::text, '-') AS start_time,
-        COALESCE(ts.end_time::text, '-') AS end_time,
-        st.status_name,
-        COALESCE(p.amount, 0) AS amount_paid
-      FROM ticket t
-      JOIN queue q ON q.queue_id = t.queue_id
-      JOIN business b ON b.business_id = q.business_id
-      JOIN ticket_status st ON st.status_id = t.status_id
-      LEFT JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
-      LEFT JOIN payment p ON p.ticket_id = t.ticket_id
-      WHERE t.customer_id = $1
-      ORDER BY t.created_at DESC
-    `;
-    const result = await pool.query(query, [customerId]);
-    return result.rows;
-  },
-
-  findOwnedByCustomer: async (ticketId, customerId) => {
-    const result = await pool.query(
-      `SELECT ticket_id, status_id FROM ticket WHERE ticket_id = $1 AND customer_id = $2`,
-      [ticketId, customerId]
-    );
-    return result.rows[0];
-  },
-
-  // Today's active tickets (waiting or serving) for a business, oldest first.
-  findActiveForBusiness: async (businessId) => {
-    const query = `
-      SELECT
-        t.ticket_id, t.queue_number, t.status_id, st.status_name,
-        c.fname, c.lname,
-        COALESCE(ts.start_time::text, '-') AS start_time,
-        COALESCE(ts.end_time::text, '-') AS end_time,
-        t.timeslot_id IS NULL AS is_walkin
-      FROM ticket t
-      JOIN queue q ON q.queue_id = t.queue_id
-      JOIN customer c ON c.customer_id = t.customer_id
-      JOIN ticket_status st ON st.status_id = t.status_id
-      LEFT JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
-      WHERE q.business_id = $1
-        AND q.date = CURRENT_DATE
-        AND t.status_id IN ($2, $3)
-      ORDER BY t.created_at ASC
-    `;
-    const result = await pool.query(query, [businessId, STATUS.WAITING, STATUS.SERVING]);
-    return result.rows;
-  },
-
-  // Moves a ticket from one status to another, only if it's currently in fromStatus.
-  transitionStatus: async (ticketId, fromStatus, toStatus) => {
-    const result = await pool.query(
-      `UPDATE ticket SET status_id = $1 WHERE ticket_id = $2 AND status_id = $3 RETURNING *`,
-      [toStatus, ticketId, fromStatus]
-    );
-    return result.rows[0];
-  }
-};
-
-module.exports = TicketModel;
-</file>
-
 <file path="App/backend/.dockerignore">
 node_modules
 npm-debug.log
@@ -583,6 +300,142 @@ export default function CustomerProfile() {
 }
 </file>
 
+<file path="App/frontend/src/pages/EditScheduleModal.jsx">
+import { useState, useEffect } from 'react';
+import { api } from '../lib/api';
+
+let tempIdCounter = 0;
+const nextTempId = () => `slot-${++tempIdCounter}-${Date.now()}`;
+const emptySlot = () => ({ tempId: nextTempId(), start_time: '', end_time: '', max_capacity: 1 });
+
+export default function EditScheduleModal({ businessId, onClose, onSuccess }) {
+  const [timeSlots, setTimeSlots] = useState([emptySlot()]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    api.get(`/owner/businesses/${businessId}/schedule`).then((res) => {
+      if (res.success && res.data.length > 0) {
+        setTimeSlots(res.data.map((s) => ({
+          tempId: nextTempId(),
+          start_time: s.start_time.slice(0, 5),
+          end_time: s.end_time.slice(0, 5),
+          max_capacity: s.max_capacity
+        })));
+      }
+      setLoading(false);
+    }).catch(() => { setError('Could not load current schedule.'); setLoading(false); });
+  }, [businessId]);
+
+  const updateSlot = (tempId, field, value) => {
+    setTimeSlots((prev) => prev.map((s) => (s.tempId === tempId ? { ...s, [field]: value } : s)));
+  };
+  const addSlot = () => setTimeSlots((prev) => [...prev, emptySlot()]);
+  const removeSlot = (tempId) => setTimeSlots((prev) => (prev.length === 1 ? prev : prev.filter((s) => s.tempId !== tempId)));
+
+  const validate = () => {
+    for (const slot of timeSlots) {
+      if (!slot.start_time || !slot.end_time) return 'Please fill in every time slot.';
+      if (slot.start_time >= slot.end_time) return 'Start time must be before end time.';
+      if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each slot needs a max capacity of at least 1.';
+    }
+    return '';
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const validationError = validate();
+    if (validationError) return setError(validationError);
+
+    setError('');
+    setSubmitting(true);
+    try {
+      const result = await api.put(`/owner/businesses/${businessId}/schedule`, {
+        time_slots: timeSlots.map(({ start_time, end_time, max_capacity }) => ({ start_time, end_time, max_capacity: Number(max_capacity) }))
+      });
+      if (result.success) {
+        onSuccess();
+      } else {
+        setError(result.message || 'Something went wrong. Please try again.');
+      }
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-800 rounded-t-xl">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white">Edit daily schedule</h2>
+          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl leading-none" aria-label="Close">
+            &times;
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-slate-500 dark:text-slate-400">Loading current schedule...</div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+            {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              Changes apply to the next 14 days. Slots that already have a booking are kept as-is.
+            </p>
+
+            <div className="flex justify-between items-center">
+              <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold">Daily time blocks</label>
+              <button type="button" onClick={addSlot} className="text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 text-sm font-semibold">
+                + Add block
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {timeSlots.map((slot) => (
+                <div key={slot.tempId} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
+                  <div className="flex-1">
+                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Start time</label>
+                    <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.start_time} onChange={(e) => updateSlot(slot.tempId, 'start_time', e.target.value)} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">End time</label>
+                    <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.end_time} onChange={(e) => updateSlot(slot.tempId, 'end_time', e.target.value)} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Max people</label>
+                    <input type="number" min="1" step="1" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.max_capacity} onChange={(e) => updateSlot(slot.tempId, 'max_capacity', e.target.value)} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeSlot(slot.tempId)}
+                    disabled={timeSlots.length === 1}
+                    className="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 disabled:text-slate-300 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-sm font-semibold px-2 py-2"
+                    title={timeSlots.length === 1 ? 'At least one block is required' : 'Remove this block'}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 mt-2">
+              <button type="button" onClick={onClose} disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600">
+                Cancel
+              </button>
+              <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-teal-700 dark:bg-teal-600 text-white hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors disabled:opacity-60">
+                {submitting ? 'Saving...' : 'Save schedule'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="App/frontend/src/pages/OwnerProfile.jsx">
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -754,147 +607,6 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] })
   ],
 })
-</file>
-
-<file path="App/backend/controllers/businessController.js">
-const pool = require('../config/db');
-const BusinessModel = require('../models/businessModel');
-
-// GET /api/customer/businesses
-exports.getBusinesses = async (req, res) => {
-  try {
-    const businesses = await BusinessModel.findAllWithSlots();
-    res.json({ success: true, data: businesses });
-  } catch (error) {
-    console.error('Get businesses error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-exports.getCategories = async (req, res) => {
-  try {
-    const categories = await BusinessModel.findAllCategories();
-    res.json({ success: true, data: categories });
-  } catch (error) {
-    console.error('Get categories error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-// GET /api/owner/businesses/:ownerId
-exports.getMyBusinesses = async (req, res) => {
-  try {
-    const businesses = await BusinessModel.findByOwner(req.params.ownerId);
-    res.json({ success: true, data: businesses });
-  } catch (error) {
-    console.error('Get my businesses error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-function validateNewBusiness({ business_name, is_deposit, deposit_amount, queue_type, time_slots }) {
-  if (!business_name || !business_name.trim()) return 'Please enter a business name.';
-  if (is_deposit && (!deposit_amount || Number(deposit_amount) <= 0)) {
-    return 'Please enter a valid deposit amount (greater than 0).';
-  }
-  if (queue_type === 'timeslot') {
-    if (!Array.isArray(time_slots) || time_slots.length === 0) {
-      return 'Please add at least one time slot.';
-    }
-    for (const slot of time_slots) {
-      if (!slot.date || !slot.start_time || !slot.end_time) return 'Time slot details are incomplete.';
-      if (slot.start_time >= slot.end_time) return 'Start time must be before end time for every slot.';
-      if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each time slot needs a max capacity of at least 1.';
-    }
-  }
-  return null;
-}
-
-// POST /api/owner/businesses
-exports.createBusiness = async (req, res) => {
-  const { owner_id, business_name, is_deposit, deposit_amount, queue_type, time_slots = [], category_id } = req.body;
-
-  if (!owner_id) {
-    return res.status(401).json({ success: false, message: 'Please log in again.' });
-  }
-
-  const validationError = validateNewBusiness(req.body);
-  if (validationError) {
-    return res.status(400).json({ success: false, message: validationError });
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    const business = await BusinessModel.create(client, {
-      business_name: business_name.trim(),
-      is_deposit: !!is_deposit,
-      deposit_amount: is_deposit ? Number(deposit_amount) : 0,
-      owner_id,
-      category_id
-    });
-
-    let insertedSlots = [];
-    if (queue_type === 'timeslot' && time_slots.length > 0) {
-      insertedSlots = await BusinessModel.addTimeSlots(client, business.business_id, time_slots);
-    }
-
-    await client.query('COMMIT');
-    res.status(201).json({
-      success: true,
-      message: 'Shop registered successfully.',
-      data: { ...business, time_slots: insertedSlots }
-    });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Create business error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  } finally {
-    client.release();
-  }
-};
-
-exports.getSchedule = async (req, res) => {
-  try {
-    const schedule = await BusinessModel.getSchedule(req.params.businessId);
-    res.json({ success: true, data: schedule });
-  } catch (error) {
-    console.error('Get schedule error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-exports.updateSchedule = async (req, res) => {
-  const { businessId } = req.params;
-  const { time_slots = [] } = req.body;
-
-  for (const slot of time_slots) {
-    if (!slot.start_time || !slot.end_time) {
-      return res.status(400).json({ success: false, message: 'Time slot details are incomplete.' });
-    }
-    if (slot.start_time >= slot.end_time) {
-      return res.status(400).json({ success: false, message: 'Start time must be before end time for every slot.' });
-    }
-    if (!slot.max_capacity || Number(slot.max_capacity) < 1) {
-      return res.status(400).json({ success: false, message: 'Each time slot needs a max capacity of at least 1.' });
-    }
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const updatedSlots = await BusinessModel.updateSchedule(client, businessId, time_slots);
-    await client.query('COMMIT');
-    res.json({ success: true, message: 'Schedule updated.', data: updatedSlots });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Update schedule error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  } finally {
-    client.release();
-  }
-};
 </file>
 
 <file path="App/backend/controllers/customerAuthController.js">
@@ -1110,301 +822,151 @@ exports.updateProfile = async (req, res) => {
 };
 </file>
 
-<file path="App/backend/controllers/ticketController.js">
-const TicketModel = require('../models/ticketModel');
-const { STATUS } = TicketModel;
-
-// POST /api/customer/tickets - book a slot, or take a walk-in ticket
-exports.createTicket = async (req, res) => {
-  const { customer_id, business_id, timeslot_id = null, amount_paid = 0, pax = 1 } = req.body;
-
-  const paxNum = Number(pax);
-  if (!Number.isInteger(paxNum) || paxNum < 1) {
-    return res.status(400).json({ success: false, message: 'Party size must be at least 1.' });
-  }
-
-  try {
-    // Re-check capacity on the server too, in case two people book at once
-    if (timeslot_id) {
-      const availability = await TicketModel.getSlotAvailability(timeslot_id);
-      if (!availability) {
-        return res.status(404).json({ success: false, message: 'Time slot not found.' });
-      }
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const maxDate = new Date(today); maxDate.setDate(maxDate.getDate() + 13);
-      const slotDate = new Date(availability.date);
-      if (slotDate < today || slotDate > maxDate) {
-        return res.status(400).json({ success: false, message: 'This time slot is outside the bookable window.' });
-      }
-      const remaining = availability.max_capacity - Number(availability.booked_pax);
-      if (paxNum > remaining) {
-        return res.status(409).json({
-          success: false,
-          message: `Only ${remaining} spot${remaining === 1 ? '' : 's'} left in this slot.`
-        });
-      }
-    }
-
-    const queueId = await TicketModel.findOrCreateTodayQueue(business_id);
-    const queueNumber = await TicketModel.nextQueueNumber(queueId);
-
-    const ticket = await TicketModel.create({
-      queueNumber,
-      customerId: customer_id,
-      queueId,
-      timeslotId: timeslot_id,
-      pax: paxNum
-    });
-
-    if (amount_paid > 0) {
-      await TicketModel.addDepositPayment(ticket.ticket_id, amount_paid);
-    }
-
-    const fullTicket = await TicketModel.findFullTicket(ticket.ticket_id);
-    res.status(201).json({ success: true, message: 'Booking successful', data: fullTicket });
-  } catch (error) {
-    console.error('Create ticket error:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// GET /api/customer/tickets/:customerId
-exports.getMyTickets = async (req, res) => {
-  try {
-    const tickets = await TicketModel.findByCustomer(req.params.customerId);
-    res.json({ success: true, data: tickets });
-  } catch (error) {
-    console.error('Get my tickets error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-// PATCH /api/customer/tickets/:ticketId/cancel
-exports.cancelTicket = async (req, res) => {
-  const { ticketId } = req.params;
-  const { customer_id } = req.body;
-
-  try {
-    const ticket = await TicketModel.findOwnedByCustomer(ticketId, customer_id);
-    if (!ticket) {
-      return res.status(404).json({ success: false, message: 'Booking not found.' });
-    }
-    if (ticket.status_id !== STATUS.WAITING) {
-      return res.status(400).json({ success: false, message: 'Only tickets still waiting can be cancelled.' });
-    }
-
-    const updated = await TicketModel.transitionStatus(ticketId, STATUS.WAITING, STATUS.CANCELLED);
-    res.json({ success: true, message: 'Booking cancelled.', data: updated });
-  } catch (error) {
-    console.error('Cancel ticket error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-// GET /api/owner/queue/:businessId - today's waiting + serving tickets
-exports.getQueueList = async (req, res) => {
-  try {
-    const tickets = await TicketModel.findActiveForBusiness(req.params.businessId);
-    res.json({ success: true, data: tickets });
-  } catch (error) {
-    console.error('Get queue list error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-// Shared handler for the three owner-side status transitions below
-async function transition(req, res, { from, to, notFoundMessage }) {
-  try {
-    const ticket = await TicketModel.transitionStatus(req.params.ticketId, from, to);
-    if (!ticket) {
-      return res.status(400).json({ success: false, message: notFoundMessage });
-    }
-    res.json({ success: true, data: ticket });
-  } catch (error) {
-    console.error('Update ticket status error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-}
-
-// PATCH /api/owner/tickets/:ticketId/checkin - customer scanned the QR code
-exports.checkInTicket = (req, res) =>
-  transition(req, res, {
-    from: STATUS.WAITING,
-    to: STATUS.SERVING,
-    notFoundMessage: 'This ticket is not waiting anymore.'
-  });
-
-// PATCH /api/owner/tickets/:ticketId/complete
-exports.completeTicket = (req, res) =>
-  transition(req, res, {
-    from: STATUS.SERVING,
-    to: STATUS.COMPLETED,
-    notFoundMessage: 'This ticket is not being served.'
-  });
-
-// PATCH /api/owner/tickets/:ticketId/no-show
-exports.noShowTicket = (req, res) =>
-  transition(req, res, {
-    from: STATUS.WAITING,
-    to: STATUS.CANCELLED,
-    notFoundMessage: 'Could not mark this ticket as a no-show.'
-  });
-</file>
-
-<file path="App/backend/models/businessModel.js">
+<file path="App/backend/models/ticketModel.js">
 const pool = require('../config/db');
 
-const BusinessModel = {
-  // Public list for customers, with each slot flagged as booked or free.
-  findAllWithSlots: async () => {
-    const query = `
-      SELECT
-        b.business_id,
-        b.business_name,
-        b.is_deposit,
-        b.deposit_amount,
-        c.name AS category_name,
-        c.category_id,
-        CASE WHEN COUNT(ts.timeslot_id) > 0 THEN 'timeslot' ELSE 'walkin' END AS queue_type,
-        COALESCE(
-          JSON_AGG(
-            JSON_BUILD_OBJECT(
-              'timeslot_id', ts.timeslot_id,
-              'date', ts.date,
-              'start_time', ts.start_time,
-              'end_time', ts.end_time,
-              'max_capacity', ts.max_capacity,
-           'remaining', ts.max_capacity - COALESCE(booked.total_pax, 0),
-           'is_booked', (ts.max_capacity - COALESCE(booked.total_pax, 0)) <= 0
-            )
-          ) FILTER (WHERE ts.timeslot_id IS NOT NULL),
-          '[]'
-        ) AS time_slots
-      FROM business b
-      LEFT JOIN time_slot ts ON ts.business_id = b.business_id
-        AND ts.date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '13 days'
-      LEFT JOIN category c ON c.category_id = b.category_id
-      LEFT JOIN (
-        SELECT timeslot_id, SUM(pax) AS total_pax FROM ticket
-        WHERE timeslot_id IS NOT NULL AND status_id <> 4
-        GROUP BY timeslot_id
-      ) booked ON booked.timeslot_id = ts.timeslot_id
-      GROUP BY b.business_id, c.category_id, c.name
-      ORDER BY b.business_id ASC;
-    `;
-    const result = await pool.query(query);
-    return result.rows;
-  },
+// Status ids, matching ticket_status seed data
+const STATUS = { WAITING: 1, SERVING: 2, COMPLETED: 3, CANCELLED: 4 };
 
-  // Get all categories
-  findAllCategories: async () => {
-    const result = await pool.query('SELECT * FROM category ORDER BY name ASC');
-    return result.rows;
-  },
+const TicketModel = {
+  STATUS,
 
-  // Shops belonging to one owner, with today's waiting/serving counts.
-  findByOwner: async (ownerId) => {
-    const query = `
-      SELECT
-        b.business_id,
-        b.business_name,
-        b.is_deposit,
-        b.deposit_amount,
-        c.name AS category_name,
-        COUNT(t.ticket_id) FILTER (WHERE t.status_id = 1) AS waiting_count,
-        COUNT(t.ticket_id) FILTER (WHERE t.status_id = 2) AS serving_count
-      FROM business b
-      LEFT JOIN category c ON c.category_id = b.category_id
-      LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = CURRENT_DATE
-      LEFT JOIN ticket t ON t.queue_id = q.queue_id
-      WHERE b.owner_id = $1
-      GROUP BY b.business_id, c.category_id
-      ORDER BY b.business_id ASC;
-    `;
-    const result = await pool.query(query, [ownerId]);
-    return result.rows;
-  },
-
-  create: async (client, { business_name, is_deposit, deposit_amount, owner_id, category_id }) => {
-    const result = await client.query(
-      `INSERT INTO business (business_name, is_deposit, deposit_amount, owner_id, category_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [business_name, is_deposit, deposit_amount, owner_id, category_id || null]
+  getSlotAvailability: async (timeslotId) => {
+    const result = await pool.query(
+      `SELECT
+        ts.date,
+        ts.max_capacity,
+        COALESCE(SUM(t.pax), 0) AS booked_pax
+      FROM time_slot ts
+      LEFT JOIN ticket t ON t.timeslot_id = ts.timeslot_id AND t.status_id <> $2
+      WHERE ts.timeslot_id = $1
+      GROUP BY ts.date, ts.max_capacity`,
+      [timeslotId, STATUS.CANCELLED]
     );
     return result.rows[0];
   },
 
-  addTimeSlots: async (client, businessId, slots) => {
-    // Stamp the daily template across the next 14 days (today through +13 days)
-    const dates = [];
-    for (let i = 0; i < 14; i++) {
-      const d = new Date();
-      // สร้างวันที่โดยอิงจาก Local Time ปัจจุบันบวกด้วยจำนวนวัน
-      d.setDate(d.getDate() + i);
-      
-      // ดึงค่า ปี-เดือน-วัน ออกมาและต่อ String เอง
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      
-      dates.push(`${year}-${month}-${day}`);
-    }
-
-    const values = [];
-    let paramIdx = 1;
-    const rows = [];
-
-    for (const date of dates) {
-      for (const slot of slots) {
-        const base = paramIdx - 1;
-        values.push(businessId, date, slot.start_time, slot.end_time, slot.max_capacity || 1);
-        rows.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`);
-        paramIdx += 5;
-      }
-    }
-
-    const result = await client.query(
-      `INSERT INTO time_slot (business_id, date, start_time, end_time, max_capacity)
-        VALUES ${rows.join(', ')}
-        RETURNING *`,
-      values
-    );
-    return result.rows;
-  },
-
-  // Current daily template — dedupe by time since every day repeats the same blocks
-  getSchedule: async (businessId) => {
+  // One queue per business per day. Reuses today's row if it already exists.
+  findOrCreateTodayQueue: async (businessId) => {
     const result = await pool.query(
-      `SELECT DISTINCT start_time, end_time, max_capacity
-       FROM time_slot
-       WHERE business_id = $1 AND date >= CURRENT_DATE
-       ORDER BY start_time ASC`,
+      `INSERT INTO queue (date, business_id)
+       VALUES (CURRENT_DATE, $1)
+       ON CONFLICT (date, business_id) DO UPDATE SET business_id = EXCLUDED.business_id
+       RETURNING queue_id`,
       [businessId]
     );
+    return result.rows[0].queue_id;
+  },
+
+  nextQueueNumber: async (queueId) => {
+    const result = await pool.query(
+      `SELECT COUNT(*) + 1 AS next_number FROM ticket WHERE queue_id = $1`,
+      [queueId]
+    );
+    return `A${String(result.rows[0].next_number).padStart(3, '0')}`;
+  },
+
+  create: async ({ queueNumber, customerId, queueId, timeslotId, pax }) => {
+    const result = await pool.query(
+      `INSERT INTO ticket (queue_number, customer_id, queue_id, timeslot_id, status_id, pax)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *`,
+       [queueNumber, customerId, queueId, timeslotId, STATUS.WAITING, pax]
+    );
+    return result.rows[0];
+  },
+
+  addDepositPayment: async (ticketId, amount) => {
+    await pool.query(
+      `INSERT INTO payment (ticket_id, amount, status_id) VALUES ($1, $2, 2)`,
+      [ticketId, amount]
+    );
+  },
+
+  findFullTicket: async (ticketId) => {
+    const query = `
+      SELECT
+         t.ticket_id, t.queue_number, t.created_at,
+         t.pax,
+         b.business_name, q.date,
+        COALESCE(ts.start_time::text, '-') AS start_time,
+        COALESCE(ts.end_time::text, '-') AS end_time,
+        st.status_name
+      FROM ticket t
+      JOIN queue q ON q.queue_id = t.queue_id
+      JOIN business b ON b.business_id = q.business_id
+      JOIN ticket_status st ON st.status_id = t.status_id
+      LEFT JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+      WHERE t.ticket_id = $1
+    `;
+    const result = await pool.query(query, [ticketId]);
+    return result.rows[0];
+  },
+
+  findByCustomer: async (customerId) => {
+    const query = `
+      SELECT
+         t.ticket_id, t.queue_number, t.created_at, t.status_id, t.pax,
+         b.business_id, b.business_name, q.date,
+        COALESCE(ts.start_time::text, '-') AS start_time,
+        COALESCE(ts.end_time::text, '-') AS end_time,
+        st.status_name,
+        COALESCE(p.amount, 0) AS amount_paid
+      FROM ticket t
+      JOIN queue q ON q.queue_id = t.queue_id
+      JOIN business b ON b.business_id = q.business_id
+      JOIN ticket_status st ON st.status_id = t.status_id
+      LEFT JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+      LEFT JOIN payment p ON p.ticket_id = t.ticket_id
+      WHERE t.customer_id = $1
+      ORDER BY t.created_at DESC
+    `;
+    const result = await pool.query(query, [customerId]);
     return result.rows;
   },
 
-  // Replaces the daily template for the whole shop, re-stamping the next 14 days.
-  // Slots that already have a booking are left alone — never deleted out from
-  // under a customer who already reserved them.
-  updateSchedule: async (client, businessId, slots) => {
-    await client.query(
-      `DELETE FROM time_slot
-       WHERE business_id = $1
-         AND date >= CURRENT_DATE
-         AND timeslot_id NOT IN (
-           SELECT timeslot_id FROM ticket WHERE timeslot_id IS NOT NULL
-         )`,
-      [businessId]
+  findOwnedByCustomer: async (ticketId, customerId) => {
+    const result = await pool.query(
+      `SELECT ticket_id, status_id FROM ticket WHERE ticket_id = $1 AND customer_id = $2`,
+      [ticketId, customerId]
     );
+    return result.rows[0];
+  },
 
-    if (slots.length === 0) return [];
-    return BusinessModel.addTimeSlots(client, businessId, slots);
+  // Today's active tickets (waiting or serving) for a business, oldest first.
+  findActiveForBusiness: async (businessId) => {
+    const query = `
+      SELECT
+        t.ticket_id, t.queue_number, t.status_id, st.status_name,
+        c.fname, c.lname,
+        COALESCE(ts.start_time::text, '-') AS start_time,
+        COALESCE(ts.end_time::text, '-') AS end_time,
+        t.timeslot_id IS NULL AS is_walkin
+      FROM ticket t
+      JOIN queue q ON q.queue_id = t.queue_id
+      JOIN customer c ON c.customer_id = t.customer_id
+      JOIN ticket_status st ON st.status_id = t.status_id
+      LEFT JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+      WHERE q.business_id = $1
+        AND q.date = CURRENT_DATE
+        AND t.status_id IN ($2, $3)
+      ORDER BY t.created_at ASC
+    `;
+    const result = await pool.query(query, [businessId, STATUS.WAITING, STATUS.SERVING]);
+    return result.rows;
+  },
+
+  // Moves a ticket from one status to another, only if it's currently in fromStatus.
+  transitionStatus: async (ticketId, fromStatus, toStatus) => {
+    const result = await pool.query(
+      `UPDATE ticket SET status_id = $1 WHERE ticket_id = $2 AND status_id = $3 RETURNING *`,
+      [toStatus, ticketId, fromStatus]
+    );
+    return result.rows[0];
   }
 };
 
-module.exports = BusinessModel;
+module.exports = TicketModel;
 </file>
 
 <file path="App/backend/app.js">
@@ -1717,6 +1279,444 @@ const pool = new Pool({
 module.exports = pool;
 </file>
 
+<file path="App/backend/controllers/businessController.js">
+const pool = require('../config/db');
+const BusinessModel = require('../models/businessModel');
+
+// GET /api/customer/businesses
+exports.getBusinesses = async (req, res) => {
+  try {
+    const businesses = await BusinessModel.findAllWithSlots();
+    res.json({ success: true, data: businesses });
+  } catch (error) {
+    console.error('Get businesses error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+exports.getCategories = async (req, res) => {
+  try {
+    const categories = await BusinessModel.findAllCategories();
+    res.json({ success: true, data: categories });
+  } catch (error) {
+    console.error('Get categories error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// GET /api/owner/businesses/:ownerId
+exports.getMyBusinesses = async (req, res) => {
+  try {
+    const businesses = await BusinessModel.findByOwner(req.params.ownerId);
+    res.json({ success: true, data: businesses });
+  } catch (error) {
+    console.error('Get my businesses error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+function validateNewBusiness({ business_name, is_deposit, deposit_amount, queue_type, time_slots }) {
+  if (!business_name || !business_name.trim()) return 'Please enter a business name.';
+  if (is_deposit && (!deposit_amount || Number(deposit_amount) <= 0)) {
+    return 'Please enter a valid deposit amount (greater than 0).';
+  }
+  if (queue_type === 'timeslot') {
+    if (!Array.isArray(time_slots) || time_slots.length === 0) {
+      return 'Please add at least one time slot.';
+    }
+    for (const slot of time_slots) {
+      if (!slot.date || !slot.start_time || !slot.end_time) return 'Time slot details are incomplete.';
+      if (slot.start_time >= slot.end_time) return 'Start time must be before end time for every slot.';
+      if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each time slot needs a max capacity of at least 1.';
+    }
+  }
+  return null;
+}
+
+// POST /api/owner/businesses
+exports.createBusiness = async (req, res) => {
+  const { owner_id, business_name, is_deposit, deposit_amount, queue_type, time_slots = [], category_id } = req.body;
+
+  if (!owner_id) {
+    return res.status(401).json({ success: false, message: 'Please log in again.' });
+  }
+
+  const validationError = validateNewBusiness(req.body);
+  if (validationError) {
+    return res.status(400).json({ success: false, message: validationError });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const business = await BusinessModel.create(client, {
+      business_name: business_name.trim(),
+      is_deposit: !!is_deposit,
+      deposit_amount: is_deposit ? Number(deposit_amount) : 0,
+      owner_id,
+      category_id
+    });
+
+    let insertedSlots = [];
+    if (queue_type === 'timeslot' && time_slots.length > 0) {
+      insertedSlots = await BusinessModel.addTimeSlots(client, business.business_id, time_slots);
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      success: true,
+      message: 'Shop registered successfully.',
+      data: { ...business, time_slots: insertedSlots }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Create business error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+};
+
+exports.getSchedule = async (req, res) => {
+  try {
+    const schedule = await BusinessModel.getSchedule(req.params.businessId);
+    res.json({ success: true, data: schedule });
+  } catch (error) {
+    console.error('Get schedule error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+exports.updateSchedule = async (req, res) => {
+  const { businessId } = req.params;
+  const { time_slots = [] } = req.body;
+
+  for (const slot of time_slots) {
+    if (!slot.start_time || !slot.end_time) {
+      return res.status(400).json({ success: false, message: 'Time slot details are incomplete.' });
+    }
+    if (slot.start_time >= slot.end_time) {
+      return res.status(400).json({ success: false, message: 'Start time must be before end time for every slot.' });
+    }
+    if (!slot.max_capacity || Number(slot.max_capacity) < 1) {
+      return res.status(400).json({ success: false, message: 'Each time slot needs a max capacity of at least 1.' });
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const updatedSlots = await BusinessModel.updateSchedule(client, businessId, time_slots);
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Schedule updated.', data: updatedSlots });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update schedule error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+};
+</file>
+
+<file path="App/backend/controllers/ticketController.js">
+const TicketModel = require('../models/ticketModel');
+const { STATUS } = TicketModel;
+
+// POST /api/customer/tickets - book a slot, or take a walk-in ticket
+exports.createTicket = async (req, res) => {
+  const { customer_id, business_id, timeslot_id = null, amount_paid = 0, pax = 1 } = req.body;
+
+  const paxNum = Number(pax);
+  if (!Number.isInteger(paxNum) || paxNum < 1) {
+    return res.status(400).json({ success: false, message: 'Party size must be at least 1.' });
+  }
+
+  try {
+    // Re-check capacity on the server too, in case two people book at once
+    if (timeslot_id) {
+      const availability = await TicketModel.getSlotAvailability(timeslot_id);
+      if (!availability) {
+        return res.status(404).json({ success: false, message: 'Time slot not found.' });
+      }
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const maxDate = new Date(today); maxDate.setDate(maxDate.getDate() + 13);
+      const slotDate = new Date(availability.date);
+      if (slotDate < today || slotDate > maxDate) {
+        return res.status(400).json({ success: false, message: 'This time slot is outside the bookable window.' });
+      }
+      const remaining = availability.max_capacity - Number(availability.booked_pax);
+      if (paxNum > remaining) {
+        return res.status(409).json({
+          success: false,
+          message: `Only ${remaining} spot${remaining === 1 ? '' : 's'} left in this slot.`
+        });
+      }
+    }
+
+    const queueId = await TicketModel.findOrCreateTodayQueue(business_id);
+    const queueNumber = await TicketModel.nextQueueNumber(queueId);
+
+    const ticket = await TicketModel.create({
+      queueNumber,
+      customerId: customer_id,
+      queueId,
+      timeslotId: timeslot_id,
+      pax: paxNum
+    });
+
+    if (amount_paid > 0) {
+      await TicketModel.addDepositPayment(ticket.ticket_id, amount_paid);
+    }
+
+    const fullTicket = await TicketModel.findFullTicket(ticket.ticket_id);
+    res.status(201).json({ success: true, message: 'Booking successful', data: fullTicket });
+  } catch (error) {
+    console.error('Create ticket error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/customer/tickets/:customerId
+exports.getMyTickets = async (req, res) => {
+  try {
+    const tickets = await TicketModel.findByCustomer(req.params.customerId);
+    res.json({ success: true, data: tickets });
+  } catch (error) {
+    console.error('Get my tickets error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// PATCH /api/customer/tickets/:ticketId/cancel
+exports.cancelTicket = async (req, res) => {
+  const { ticketId } = req.params;
+  const { customer_id } = req.body;
+
+  try {
+    const ticket = await TicketModel.findOwnedByCustomer(ticketId, customer_id);
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+    if (ticket.status_id !== STATUS.WAITING) {
+      return res.status(400).json({ success: false, message: 'Only tickets still waiting can be cancelled.' });
+    }
+
+    const updated = await TicketModel.transitionStatus(ticketId, STATUS.WAITING, STATUS.CANCELLED);
+    res.json({ success: true, message: 'Booking cancelled.', data: updated });
+  } catch (error) {
+    console.error('Cancel ticket error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// GET /api/owner/queue/:businessId - today's waiting + serving tickets
+exports.getQueueList = async (req, res) => {
+  try {
+    const tickets = await TicketModel.findActiveForBusiness(req.params.businessId);
+    res.json({ success: true, data: tickets });
+  } catch (error) {
+    console.error('Get queue list error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Shared handler for the three owner-side status transitions below
+async function transition(req, res, { from, to, notFoundMessage }) {
+  try {
+    const ticket = await TicketModel.transitionStatus(req.params.ticketId, from, to);
+    if (!ticket) {
+      return res.status(400).json({ success: false, message: notFoundMessage });
+    }
+    res.json({ success: true, data: ticket });
+  } catch (error) {
+    console.error('Update ticket status error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+}
+
+// PATCH /api/owner/tickets/:ticketId/checkin - customer scanned the QR code
+exports.checkInTicket = (req, res) =>
+  transition(req, res, {
+    from: STATUS.WAITING,
+    to: STATUS.SERVING,
+    notFoundMessage: 'This ticket is not waiting anymore.'
+  });
+
+// PATCH /api/owner/tickets/:ticketId/complete
+exports.completeTicket = (req, res) =>
+  transition(req, res, {
+    from: STATUS.SERVING,
+    to: STATUS.COMPLETED,
+    notFoundMessage: 'This ticket is not being served.'
+  });
+
+// PATCH /api/owner/tickets/:ticketId/no-show
+exports.noShowTicket = (req, res) =>
+  transition(req, res, {
+    from: STATUS.WAITING,
+    to: STATUS.CANCELLED,
+    notFoundMessage: 'Could not mark this ticket as a no-show.'
+  });
+</file>
+
+<file path="App/backend/models/businessModel.js">
+const pool = require('../config/db');
+
+const BusinessModel = {
+  // Public list for customers, with each slot flagged as booked or free.
+  findAllWithSlots: async () => {
+    const query = `
+      SELECT
+        b.business_id,
+        b.business_name,
+        b.is_deposit,
+        b.deposit_amount,
+        c.name AS category_name,
+        c.category_id,
+        CASE WHEN COUNT(ts.timeslot_id) > 0 THEN 'timeslot' ELSE 'walkin' END AS queue_type,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'timeslot_id', ts.timeslot_id,
+              'date', ts.date,
+              'start_time', ts.start_time,
+              'end_time', ts.end_time,
+              'max_capacity', ts.max_capacity,
+           'remaining', ts.max_capacity - COALESCE(booked.total_pax, 0),
+           'is_booked', (ts.max_capacity - COALESCE(booked.total_pax, 0)) <= 0
+            )
+          ) FILTER (WHERE ts.timeslot_id IS NOT NULL),
+          '[]'
+        ) AS time_slots
+      FROM business b
+      LEFT JOIN time_slot ts ON ts.business_id = b.business_id
+        AND ts.date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '13 days'
+      LEFT JOIN category c ON c.category_id = b.category_id
+      LEFT JOIN (
+        SELECT timeslot_id, SUM(pax) AS total_pax FROM ticket
+        WHERE timeslot_id IS NOT NULL AND status_id <> 4
+        GROUP BY timeslot_id
+      ) booked ON booked.timeslot_id = ts.timeslot_id
+      GROUP BY b.business_id, c.category_id, c.name
+      ORDER BY b.business_id ASC;
+    `;
+    const result = await pool.query(query);
+    return result.rows;
+  },
+
+  // Get all categories
+  findAllCategories: async () => {
+    const result = await pool.query('SELECT * FROM category ORDER BY name ASC');
+    return result.rows;
+  },
+
+  // Shops belonging to one owner, with today's waiting/serving counts.
+  findByOwner: async (ownerId) => {
+    const query = `
+      SELECT
+        b.business_id,
+        b.business_name,
+        b.is_deposit,
+        b.deposit_amount,
+        c.name AS category_name,
+        COUNT(t.ticket_id) FILTER (WHERE t.status_id = 1) AS waiting_count,
+        COUNT(t.ticket_id) FILTER (WHERE t.status_id = 2) AS serving_count
+      FROM business b
+      LEFT JOIN category c ON c.category_id = b.category_id
+      LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = CURRENT_DATE
+      LEFT JOIN ticket t ON t.queue_id = q.queue_id
+      WHERE b.owner_id = $1
+      GROUP BY b.business_id, c.category_id
+      ORDER BY b.business_id ASC;
+    `;
+    const result = await pool.query(query, [ownerId]);
+    return result.rows;
+  },
+
+  create: async (client, { business_name, is_deposit, deposit_amount, owner_id, category_id }) => {
+    const result = await client.query(
+      `INSERT INTO business (business_name, is_deposit, deposit_amount, owner_id, category_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [business_name, is_deposit, deposit_amount, owner_id, category_id || null]
+    );
+    return result.rows[0];
+  },
+
+  addTimeSlots: async (client, businessId, slots) => {
+    // Stamp the daily template across the next 14 days (today through +13 days)
+    const dates = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date();
+      // สร้างวันที่โดยอิงจาก Local Time ปัจจุบันบวกด้วยจำนวนวัน
+      d.setDate(d.getDate() + i);
+      
+      // ดึงค่า ปี-เดือน-วัน ออกมาและต่อ String เอง
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      
+      dates.push(`${year}-${month}-${day}`);
+    }
+
+    const values = [];
+    let paramIdx = 1;
+    const rows = [];
+
+    for (const date of dates) {
+      for (const slot of slots) {
+        const base = paramIdx - 1;
+        values.push(businessId, date, slot.start_time, slot.end_time, slot.max_capacity || 1);
+        rows.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`);
+        paramIdx += 5;
+      }
+    }
+
+    const result = await client.query(
+      `INSERT INTO time_slot (business_id, date, start_time, end_time, max_capacity)
+        VALUES ${rows.join(', ')}
+        RETURNING *`,
+      values
+    );
+    return result.rows;
+  },
+
+  // Current daily template — dedupe by time since every day repeats the same blocks
+  getSchedule: async (businessId) => {
+    const result = await pool.query(
+      `SELECT DISTINCT start_time, end_time, max_capacity
+       FROM time_slot
+       WHERE business_id = $1 AND date >= CURRENT_DATE
+       ORDER BY start_time ASC`,
+      [businessId]
+    );
+    return result.rows;
+  },
+
+  // Replaces the daily template for the whole shop, re-stamping the next 14 days.
+  // Slots that already have a booking are left alone — never deleted out from
+  // under a customer who already reserved them.
+  updateSchedule: async (client, businessId, slots) => {
+    await client.query(
+      `DELETE FROM time_slot
+       WHERE business_id = $1
+         AND date >= CURRENT_DATE
+         AND timeslot_id NOT IN (
+           SELECT timeslot_id FROM ticket WHERE timeslot_id IS NOT NULL
+         )`,
+      [businessId]
+    );
+
+    if (slots.length === 0) return [];
+    return BusinessModel.addTimeSlots(client, businessId, slots);
+  }
+};
+
+module.exports = BusinessModel;
+</file>
+
 <file path="App/backend/models/customerModel.js">
 const pool = require('../config/db');
 
@@ -1980,247 +1980,6 @@ export default function OwnerSignUp() {
     </div>
   );
 }
-</file>
-
-<file path="App/frontend/src/pages/RegisterBusinessModal.jsx">
-import { useState } from 'react';
-import { api } from '../lib/api';
-
-let tempIdCounter = 0;
-const nextTempId = () => `slot-${++tempIdCounter}-${Date.now()}`;
-
-const emptySlot = () => ({ tempId: nextTempId(), start_time: '', end_time: '', max_capacity: 1 });
-
-export default function RegisterBusinessModal({ ownerId, onClose, onSuccess }) {
-  const [businessName, setBusinessName] = useState('');
-  const [isDeposit, setIsDeposit] = useState(false);
-  const [depositAmount, setDepositAmount] = useState('');
-  const [queueType, setQueueType] = useState('walkin'); // 'walkin' | 'timeslot'
-  const [timeSlots, setTimeSlots] = useState([emptySlot()]);
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const updateSlot = (tempId, field, value) => {
-    setTimeSlots((prev) => prev.map((slot) => (slot.tempId === tempId ? { ...slot, [field]: value } : slot)));
-  };
-
-  const addSlot = () => setTimeSlots((prev) => [...prev, emptySlot()]);
-  const removeSlot = (tempId) => setTimeSlots((prev) => (prev.length === 1 ? prev : prev.filter((s) => s.tempId !== tempId)));
-
-  const validate = () => {
-    if (!businessName.trim()) return 'Please enter a shop name.';
-    if (isDeposit && (!depositAmount || Number(depositAmount) <= 0)) return 'Please enter a valid deposit amount.';
-    if (queueType === 'timeslot') {
-      for (const slot of timeSlots) {
-        if (!slot.start_time || !slot.end_time) return 'Please fill in every time slot.';
-        if (slot.start_time >= slot.end_time) return 'Start time must be before end time.';
-        if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each slot needs a max capacity of at least 1.';
-      }
-    }
-    return '';
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const validationError = validate();
-    if (validationError) return setError(validationError);
-
-    setError('');
-    setSubmitting(true);
-    try {
-      const result = await api.post('/owner/businesses', {
-        owner_id: ownerId,
-        business_name: businessName.trim(),
-        is_deposit: isDeposit,
-        deposit_amount: isDeposit ? Number(depositAmount) : 0,
-        queue_type: queueType,
-        time_slots: queueType === 'timeslot' ? timeSlots.map(({ start_time, end_time, max_capacity }) => ({ start_time, end_time, max_capacity: Number(max_capacity) })) : []
-      });
-
-      if (result.success) {
-        onSuccess(result.data);
-      } else {
-        setError(result.message || 'Something went wrong. Please try again.');
-      }
-    } catch (err) {
-      console.error('Create business error:', err);
-      setError('Could not reach the server.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto transition-colors duration-300">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-800 rounded-t-xl transition-colors duration-300">
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white">Register a new shop</h2>
-          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl leading-none" aria-label="Close">
-            &times;
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-6">
-          {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
-
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Shop name</label>
-            <input
-              type="text"
-              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="e.g. Hakum Village Cafe"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Take a deposit?</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setIsDeposit(false)}
-                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
-                  !isDeposit ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
-                }`}
-              >
-                No deposit
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsDeposit(true)}
-                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
-                  isDeposit ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
-                }`}
-              >
-                Take deposit
-              </button>
-            </div>
-
-            {isDeposit && (
-              <div className="mt-3">
-                <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Deposit amount (฿)</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="e.g. 100"
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">How do customers queue?</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setQueueType('walkin')}
-                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
-                  queueType === 'walkin' ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
-                }`}
-              >
-                Walk-in
-              </button>
-              <button
-                type="button"
-                onClick={() => setQueueType('timeslot')}
-                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
-                  queueType === 'timeslot' ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
-                }`}
-              >
-                Time slots
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-              {queueType === 'walkin' ? 'Customers get a ticket instantly, no time to pick.' : 'Customers must pick one of the slots below to book.'}
-            </p>
-          </div>
-
-          {queueType === 'timeslot' && (
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold">Time slots</label>
-                <button type="button" onClick={addSlot} className="text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 text-sm font-semibold">
-                  + Add slot
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {timeSlots.map((slot) => (
-                  <div key={slot.tempId} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
-                    <div className="flex-1">
-                      <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Start time</label>
-                      <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.start_time} onChange={(e) => updateSlot(slot.tempId, 'start_time', e.target.value)} />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">End time</label>
-                      <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.end_time} onChange={(e) => updateSlot(slot.tempId, 'end_time', e.target.value)} />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Max people</label>
-                      <input type="number" min="1" step="1" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.max_capacity} onChange={(e) => updateSlot(slot.tempId, 'max_capacity', e.target.value)} />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeSlot(slot.tempId)}
-                      disabled={timeSlots.length === 1}
-                      className="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 disabled:text-slate-300 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-sm font-semibold px-2 py-2"
-                      title={timeSlots.length === 1 ? 'At least one slot is required' : 'Remove this slot'}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3 mt-2">
-            <button type="button" onClick={onClose} disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-teal-700 dark:bg-teal-600 text-white hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors disabled:opacity-60">
-              {submitting ? 'Saving...' : 'Register shop'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="App/backend/routes/ownerRoutes.js">
-const express = require('express');
-const router = express.Router();
-
-const auth = require('../controllers/ownerAuthController');
-const business = require('../controllers/businessController');
-const ticket = require('../controllers/ticketController');
-
-router.post('/signup', auth.signup);
-router.post('/login', auth.login);
-
-router.get('/businesses/:ownerId', business.getMyBusinesses);
-router.post('/businesses', business.createBusiness);
-router.get('/businesses/:businessId/schedule', business.getSchedule);
-router.put('/businesses/:businessId/schedule', business.updateSchedule);
-
-router.get('/queue/:businessId', ticket.getQueueList);
-router.patch('/tickets/:ticketId/checkin', ticket.checkInTicket);
-router.patch('/tickets/:ticketId/complete', ticket.completeTicket);
-router.patch('/tickets/:ticketId/no-show', ticket.noShowTicket);
-
-router.get('/profile/:id', auth.getProfile);
-router.put('/profile/:id', auth.updateProfile);
-
-router.post('/google-login', auth.googleLogin);
-
-module.exports = router;
 </file>
 
 <file path="App/frontend/src/components/Navbar.jsx">
@@ -2512,6 +2271,533 @@ export default function MyTickets() {
 }
 </file>
 
+<file path="App/frontend/src/pages/OwnerLogin.jsx">
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { api } from '../lib/api';
+import { GoogleLogin } from '@react-oauth/google';
+
+export default function OwnerLogin() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    try {
+      const data = await api.post('/owner/login', { email, password });
+      if (!data.success) return setError(data.message);
+
+      if (data.token) localStorage.setItem('token', data.token);
+      localStorage.setItem('owner_user', JSON.stringify(data.owner));
+      navigate('/owner/dashboard');
+    } catch {
+      setError('Could not connect to the server.');
+    }
+  };
+
+  const handleQuickLogin = () => {
+    setError('');
+    
+    localStorage.setItem('token', 'bypass-test-token');
+    localStorage.setItem('owner_user', JSON.stringify({ 
+      id: 1, 
+      fname: 'John', 
+      lname: 'Doe', 
+      email: 'john@example.com' 
+    }));
+    
+    navigate('/owner/dashboard');
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    try {
+      const data = await api.post('/owner/google-login', { credential: credentialResponse.credential });
+      if (!data.success) return setError(data.message);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('owner_user', JSON.stringify(data.owner));
+      navigate('/owner/dashboard');
+    } catch { setError('Google Login Failed.'); }
+  };
+
+  return (
+    // เปลี่ยนจาก bg-slate-800 เป็น bg-slate-50 (สว่าง) และเพิ่ม dark:bg-slate-900
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors duration-300">
+      {/* เพิ่ม dark:bg-slate-800 ให้ตัวกล่อง */}
+      <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-96 transition-colors duration-300">
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">QFlow for business</h2>
+
+        {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded mb-4 text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
+
+        <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          <div>
+            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Work email</label>
+            <input type="email" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Password</label>
+            <input type="password" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          
+          <button type="submit" className="bg-teal-700 hover:bg-teal-800 text-white font-bold py-2 px-4 rounded mt-2 transition-colors">
+            Sign in
+          </button>
+
+          <button 
+            type="button" 
+            onClick={handleQuickLogin}
+            className="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-2 px-4 rounded transition-colors"
+          >
+            🚀 Quick Login (Test Owner)
+          </button>
+          
+          <div className="mt-4 flex flex-col items-center gap-3">
+            <div className="relative flex items-center py-2 w-full">
+              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
+              <span className="flex-shrink-0 mx-4 text-slate-400 dark:text-slate-400 text-sm font-medium">Or</span>
+              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
+            </div>
+
+            <GoogleLogin 
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Google Login Failed')}
+              useOneTap={false}
+            />
+          </div>
+        </form>
+
+        <div className="mt-4 text-sm text-center flex flex-col gap-2">
+          <p className="text-slate-600 dark:text-slate-300">New here? <Link to="/owner/signup" className="text-teal-700 dark:text-teal-400 hover:underline">Register your shop</Link></p>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mt-4">Just here to book? <Link to="/login" className="text-teal-700 dark:text-teal-400 hover:underline">Customer login</Link></p>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="App/frontend/src/pages/RegisterBusinessModal.jsx">
+import { useState } from 'react';
+import { api } from '../lib/api';
+
+let tempIdCounter = 0;
+const nextTempId = () => `slot-${++tempIdCounter}-${Date.now()}`;
+
+const emptySlot = () => ({ tempId: nextTempId(), start_time: '', end_time: '', max_capacity: 1 });
+
+export default function RegisterBusinessModal({ ownerId, onClose, onSuccess }) {
+  const [businessName, setBusinessName] = useState('');
+  const [isDeposit, setIsDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [queueType, setQueueType] = useState('walkin'); // 'walkin' | 'timeslot'
+  const [timeSlots, setTimeSlots] = useState([emptySlot()]);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const updateSlot = (tempId, field, value) => {
+    setTimeSlots((prev) => prev.map((slot) => (slot.tempId === tempId ? { ...slot, [field]: value } : slot)));
+  };
+
+  const addSlot = () => setTimeSlots((prev) => [...prev, emptySlot()]);
+  const removeSlot = (tempId) => setTimeSlots((prev) => (prev.length === 1 ? prev : prev.filter((s) => s.tempId !== tempId)));
+
+  const validate = () => {
+    if (!businessName.trim()) return 'Please enter a shop name.';
+    if (isDeposit && (!depositAmount || Number(depositAmount) <= 0)) return 'Please enter a valid deposit amount.';
+    if (queueType === 'timeslot') {
+      for (const slot of timeSlots) {
+        if (!slot.start_time || !slot.end_time) return 'Please fill in every time slot.';
+        if (slot.start_time >= slot.end_time) return 'Start time must be before end time.';
+        if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each slot needs a max capacity of at least 1.';
+      }
+    }
+    return '';
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const validationError = validate();
+    if (validationError) return setError(validationError);
+
+    setError('');
+    setSubmitting(true);
+    try {
+      const result = await api.post('/owner/businesses', {
+        owner_id: ownerId,
+        business_name: businessName.trim(),
+        is_deposit: isDeposit,
+        deposit_amount: isDeposit ? Number(depositAmount) : 0,
+        queue_type: queueType,
+        time_slots: queueType === 'timeslot' ? timeSlots.map(({ start_time, end_time, max_capacity }) => ({ start_time, end_time, max_capacity: Number(max_capacity) })) : []
+      });
+
+      if (result.success) {
+        onSuccess(result.data);
+      } else {
+        setError(result.message || 'Something went wrong. Please try again.');
+      }
+    } catch (err) {
+      console.error('Create business error:', err);
+      setError('Could not reach the server.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto transition-colors duration-300">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-800 rounded-t-xl transition-colors duration-300">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white">Register a new shop</h2>
+          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-2xl leading-none" aria-label="Close">
+            &times;
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-6">
+          {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
+
+          <div>
+            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Shop name</label>
+            <input
+              type="text"
+              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              placeholder="e.g. Hakum Village Cafe"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Take a deposit?</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsDeposit(false)}
+                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
+                  !isDeposit ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
+                }`}
+              >
+                No deposit
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDeposit(true)}
+                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
+                  isDeposit ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
+                }`}
+              >
+                Take deposit
+              </button>
+            </div>
+
+            {isDeposit && (
+              <div className="mt-3">
+                <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Deposit amount (฿)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="e.g. 100"
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">How do customers queue?</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setQueueType('walkin')}
+                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
+                  queueType === 'walkin' ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
+                }`}
+              >
+                Walk-in
+              </button>
+              <button
+                type="button"
+                onClick={() => setQueueType('timeslot')}
+                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
+                  queueType === 'timeslot' ? 'bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
+                }`}
+              >
+                Time slots
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+              {queueType === 'walkin' ? 'Customers get a ticket instantly, no time to pick.' : 'Customers must pick one of the slots below to book.'}
+            </p>
+          </div>
+
+          {queueType === 'timeslot' && (
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold">Time slots</label>
+                <button type="button" onClick={addSlot} className="text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 text-sm font-semibold">
+                  + Add slot
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {timeSlots.map((slot) => (
+                  <div key={slot.tempId} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
+                    <div className="flex-1">
+                      <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Start time</label>
+                      <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.start_time} onChange={(e) => updateSlot(slot.tempId, 'start_time', e.target.value)} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">End time</label>
+                      <input type="time" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.end_time} onChange={(e) => updateSlot(slot.tempId, 'end_time', e.target.value)} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Max people</label>
+                      <input type="number" min="1" step="1" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded text-sm" value={slot.max_capacity} onChange={(e) => updateSlot(slot.tempId, 'max_capacity', e.target.value)} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeSlot(slot.tempId)}
+                      disabled={timeSlots.length === 1}
+                      className="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 disabled:text-slate-300 dark:disabled:text-slate-600 disabled:cursor-not-allowed text-sm font-semibold px-2 py-2"
+                      title={timeSlots.length === 1 ? 'At least one slot is required' : 'Remove this slot'}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 mt-2">
+            <button type="button" onClick={onClose} disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-teal-700 dark:bg-teal-600 text-white hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors disabled:opacity-60">
+              {submitting ? 'Saving...' : 'Register shop'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path=".gitignore">
+node_modules/
+.DS_Store
+.env
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Docker
+.docker/
+</file>
+
+<file path="App/backend/routes/customerRoutes.js">
+const express = require('express');
+const router = express.Router();
+
+const auth = require('../controllers/customerAuthController');
+const business = require('../controllers/businessController');
+const ticket = require('../controllers/ticketController');
+
+router.post('/signup', auth.signup);
+router.post('/login', auth.login);
+
+router.get('/businesses', business.getBusinesses);
+router.get('/categories', business.getCategories);
+
+router.post('/tickets', ticket.createTicket);
+router.get('/tickets/:customerId', ticket.getMyTickets);
+router.patch('/tickets/:ticketId/cancel', ticket.cancelTicket);
+
+router.get('/profile/:id', auth.getProfile);
+router.put('/profile/:id', auth.updateProfile);
+
+router.post('/google-login', auth.googleLogin);
+
+module.exports = router;
+</file>
+
+<file path="App/backend/routes/ownerRoutes.js">
+const express = require('express');
+const router = express.Router();
+
+const auth = require('../controllers/ownerAuthController');
+const business = require('../controllers/businessController');
+const ticket = require('../controllers/ticketController');
+
+router.post('/signup', auth.signup);
+router.post('/login', auth.login);
+
+router.get('/businesses/:ownerId', business.getMyBusinesses);
+router.post('/businesses', business.createBusiness);
+router.get('/businesses/:businessId/schedule', business.getSchedule);
+router.put('/businesses/:businessId/schedule', business.updateSchedule);
+
+router.get('/queue/:businessId', ticket.getQueueList);
+router.patch('/tickets/:ticketId/checkin', ticket.checkInTicket);
+router.patch('/tickets/:ticketId/complete', ticket.completeTicket);
+router.patch('/tickets/:ticketId/no-show', ticket.noShowTicket);
+
+router.get('/profile/:id', auth.getProfile);
+router.put('/profile/:id', auth.updateProfile);
+
+router.post('/google-login', auth.googleLogin);
+
+module.exports = router;
+</file>
+
+<file path="App/frontend/src/pages/CustomerLogin.jsx">
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google'; 
+import { api } from '../lib/api';
+
+export default function CustomerLogin() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    try {
+      const data = await api.post('/customer/login', { email, password });
+      if (!data.success) return setError(data.message);
+
+      if (data.token) localStorage.setItem('token', data.token);
+      localStorage.setItem('customer_user', JSON.stringify(data.user));
+      navigate('/businesses');
+    } catch {
+      setError('Could not connect to the server.');
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    try {
+      const data = await api.post('/customer/google-login', { 
+        credential: credentialResponse.credential 
+      });
+      
+      if (!data.success) return setError(data.message);
+
+      if (data.token) localStorage.setItem('token', data.token);
+      localStorage.setItem('customer_user', JSON.stringify(data.user));
+      navigate('/businesses');
+    } catch {
+      setError('Google Login Failed. Could not connect to server.');
+    }
+  };
+
+  const handleQuickLogin = () => {
+    setError('');
+    
+    localStorage.setItem('token', 'bypass-test-token');
+    localStorage.setItem('customer_user', JSON.stringify({ 
+      id: 1, 
+      fname: 'John (Tester)', 
+      email: 'john@qflow.com' 
+    }));
+    
+    navigate('/businesses');
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors duration-300">
+      <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-96 transition-colors duration-300">
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">Log in to QFlow</h2>
+
+        {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded mb-4 text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
+
+        <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          <div>
+            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Email</label>
+            <input
+              type="email"
+              required
+              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Password</label>
+            <input
+              type="password"
+              required
+              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <button type="submit" className="bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition-colors mt-2">
+            Sign in
+          </button>
+
+          <button 
+            type="button" 
+            onClick={handleQuickLogin}
+            className="bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold py-2 px-4 rounded transition-colors"
+          >
+            🚀 Quick Login (Test Customer)
+          </button>
+          <div className="mt-4 flex flex-col items-center gap-3">
+            <div className="relative flex items-center py-2 w-full">
+              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
+              <span className="flex-shrink-0 mx-4 text-slate-400 dark:text-slate-400 text-sm font-medium">Or</span>
+              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
+            </div>
+
+            <GoogleLogin 
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Google Login Failed')}
+              useOneTap={false}
+              locale="en"
+            />
+          </div>
+        </form>
+
+        <div className="mt-4 text-sm text-center flex flex-col gap-2">
+          <p className="text-slate-700 dark:text-slate-300">
+            No account? <Link to="/signup" className="text-teal-700 dark:text-teal-400 hover:underline">Sign up</Link>
+          </p>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mt-4">
+            Shop owner? <Link to="/owner/login" className="text-teal-700 dark:text-teal-400 hover:underline">Owner login</Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="App/frontend/src/pages/OwnerHome.jsx">
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -2767,110 +3053,83 @@ export default function OwnerHome() {
 }
 </file>
 
-<file path="App/frontend/src/pages/OwnerLogin.jsx">
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { api } from '../lib/api';
-import { GoogleLogin } from '@react-oauth/google';
+<file path="App/frontend/src/App.jsx">
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-export default function OwnerLogin() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
+import CustomerLogin from './pages/CustomerLogin';
+import OwnerLogin from './pages/OwnerLogin';
+import CustomerSignUp from './pages/CustomerSignUp';
+import OwnerSignUp from './pages/OwnerSignUp';
+import CustomerHome from './pages/CustomerHome';
+import OwnerHome from './pages/OwnerHome';
+import MyTickets from './pages/MyTickets';
+import CustomerProfile from './pages/CustomerProfile';
+import OwnerProfile from './pages/OwnerProfile';
+import ProtectedRoute from './components/ProtectedRoute';
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
+function DarkModeToggle() {
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return false
+  });
 
-    try {
-      const data = await api.post('/owner/login', { email, password });
-      if (!data.success) return setError(data.message);
-
-      if (data.token) localStorage.setItem('token', data.token);
-      localStorage.setItem('owner_user', JSON.stringify(data.owner));
-      navigate('/owner/dashboard');
-    } catch {
-      setError('Could not connect to the server.');
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (isDark) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
     }
-  };
-
-  const handleQuickLogin = () => {
-    setError('');
-    
-    localStorage.setItem('token', 'bypass-test-token');
-    localStorage.setItem('owner_user', JSON.stringify({ 
-      id: 1, 
-      fname: 'John', 
-      lname: 'Doe', 
-      email: 'john@example.com' 
-    }));
-    
-    navigate('/owner/dashboard');
-  };
-
-  const handleGoogleSuccess = async (credentialResponse) => {
-    try {
-      const data = await api.post('/owner/google-login', { credential: credentialResponse.credential });
-      if (!data.success) return setError(data.message);
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('owner_user', JSON.stringify(data.owner));
-      navigate('/owner/dashboard');
-    } catch { setError('Google Login Failed.'); }
-  };
+  }, [isDark]);
 
   return (
-    // เปลี่ยนจาก bg-slate-800 เป็น bg-slate-50 (สว่าง) และเพิ่ม dark:bg-slate-900
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors duration-300">
-      {/* เพิ่ม dark:bg-slate-800 ให้ตัวกล่อง */}
-      <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-96 transition-colors duration-300">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">QFlow for business</h2>
+    <button
+      onClick={() => setIsDark(!isDark)}
+      className="fixed bottom-6 right-6 p-3 rounded-full bg-slate-800 dark:bg-amber-400 text-amber-400 dark:text-slate-900 shadow-xl hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center"
+      title="Toggle Dark Mode"
+    >
+      {isDark ? (
+        <svg className="w-6 h-6 animate-[spin_4s_linear_infinite]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+      ) : (
+        <svg className="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+      )}
+    </button>
+  );
+}
 
-        {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded mb-4 text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
+export default function App() {
+  return (
+    <BrowserRouter>
+      <DarkModeToggle />
 
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Work email</label>
-            <input type="email" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Password</label>
-            <input type="password" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
-          
-          <button type="submit" className="bg-teal-700 hover:bg-teal-800 text-white font-bold py-2 px-4 rounded mt-2 transition-colors">
-            Sign in
-          </button>
+      <Routes>
+        {/* Customer - public */}
+        <Route path="/login" element={<CustomerLogin />} />
+        <Route path="/signup" element={<CustomerSignUp />} />
 
-          <button 
-            type="button" 
-            onClick={handleQuickLogin}
-            className="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-2 px-4 rounded transition-colors"
-          >
-            🚀 Quick Login (Test Owner)
-          </button>
-          
-          <div className="mt-4 flex flex-col items-center gap-3">
-            <div className="relative flex items-center py-2 w-full">
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
-              <span className="flex-shrink-0 mx-4 text-slate-400 dark:text-slate-400 text-sm font-medium">Or</span>
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
-            </div>
+        {/* Customer - protected */}
+        <Route path="/businesses" element={<ProtectedRoute role="customer"><CustomerHome /></ProtectedRoute>} />
+        <Route path="/tickets" element={<ProtectedRoute role="customer"><MyTickets /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute role="customer"><CustomerProfile /></ProtectedRoute>} />
 
-            <GoogleLogin 
-              onSuccess={handleGoogleSuccess}
-              onError={() => setError('Google Login Failed')}
-              useOneTap={false}
-            />
-          </div>
-        </form>
+        {/* Owner - public */}
+        <Route path="/owner/login" element={<OwnerLogin />} />
+        <Route path="/owner/signup" element={<OwnerSignUp />} />
 
-        <div className="mt-4 text-sm text-center flex flex-col gap-2">
-          <p className="text-slate-600 dark:text-slate-300">New here? <Link to="/owner/signup" className="text-teal-700 dark:text-teal-400 hover:underline">Register your shop</Link></p>
-          <p className="text-slate-500 dark:text-slate-400 text-xs mt-4">Just here to book? <Link to="/login" className="text-teal-700 dark:text-teal-400 hover:underline">Customer login</Link></p>
-        </div>
-      </div>
-    </div>
+        {/* Owner - protected */}
+        <Route path="/owner/dashboard" element={<ProtectedRoute role="owner"><OwnerHome /></ProtectedRoute>} />
+        <Route path="/owner/businesses/:businessId" element={<ProtectedRoute role="owner"><OwnerHome /></ProtectedRoute>} />
+        <Route path="/owner/profile" element={<ProtectedRoute role="owner"><OwnerProfile /></ProtectedRoute>} />
+
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* path ที่ไม่รู้จักทั้งหมด กันเผื่อ URL มั่ว ให้เด้งกลับหน้า login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 </file>
@@ -2926,6 +3185,9 @@ INSERT INTO owner (fname, lname, phone_number, email, password) VALUES
 ('Business', 'Owner', '09442223344', 'owner@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
 ('Shop', 'Manager', '09553334455', 'manager@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW');
 
+-- business_id order (matters below): 1 Johns Barber, 2 Sarah Dental, 3 Johns Cafe,
+-- 4 Mikes Walk-in Barber, 5 Tech Repair Shop, 6 Beauty Salon Pro, 7 Food Express,
+-- 8 Auto Service Center, 9 Fashion Hub, 10 Pet Care Clinic.
 -- Mike's Walk-in Barber (id 4) has no time slots on purpose -> treated as walk-in.
 INSERT INTO business (business_name, is_deposit, deposit_amount, owner_id, category_id) VALUES
 ('Johns Barber Shop (Siam Branch)', TRUE, 100.00, 1, 1),
@@ -2941,39 +3203,80 @@ INSERT INTO business (business_name, is_deposit, deposit_amount, owner_id, categ
 ('Pet Care Clinic', TRUE, 30.00, 6, 13);
 
 INSERT INTO subscription (start_date, end_date, business_id, plan_id, substatus_id) VALUES
-('2026-07-01', '2026-07-31', 1, 2, 1),
-('2026-07-01', '2026-12-31', 2, 3, 1),
-('2026-07-15', '2026-07-29', 3, 1, 1),
-('2026-07-01', '2026-12-31', 4, 2, 1),
-('2026-07-01', '2026-12-31', 5, 2, 1),
-('2026-07-01', '2026-12-31', 6, 2, 1);
+(CURRENT_DATE, CURRENT_DATE + 30, 1, 2, 1),
+(CURRENT_DATE, CURRENT_DATE + 180, 2, 3, 1),
+(CURRENT_DATE, CURRENT_DATE + 14, 3, 1, 1),
+(CURRENT_DATE, CURRENT_DATE + 180, 4, 2, 1),
+(CURRENT_DATE, CURRENT_DATE + 180, 5, 2, 1),
+(CURRENT_DATE, CURRENT_DATE + 180, 6, 2, 1);
 
--- Queues for all 6 businesses
+-- Today's queue row for each business (the app would auto-create these on first
+-- booking anyway via findOrCreateTodayQueue, but they're pre-seeded here so the
+-- TEST QUEUE TICKETS below have something to attach to).
 INSERT INTO queue (date, business_id) VALUES
-('2026-07-29', 1),
-('2026-07-29', 2),
-('2026-07-29', 3),
-('2026-07-29', 4),
-('2026-07-29', 5),
-('2026-07-29', 6);
+(CURRENT_DATE, 1),
+(CURRENT_DATE, 2),
+(CURRENT_DATE, 3),
+(CURRENT_DATE, 4),
+(CURRENT_DATE, 5),
+(CURRENT_DATE, 6);
 
-INSERT INTO time_slot (date, start_time, end_time, business_id) VALUES
--- Business 1 (Johns Barber Shop)
-('2026-07-29', '10:00:00', '11:00:00', 1),
-('2026-07-29', '11:00:00', '12:00:00', 1),
-('2026-07-29', '13:00:00', '14:00:00', 1),
--- Business 2 (Sarah Dental Clinic)
-('2026-07-29', '09:00:00', '10:00:00', 2),
-('2026-07-29', '14:00:00', '15:00:00', 2),
--- Business 3 (Johns Cafe & Bar)
-('2026-07-29', '12:00:00', '13:00:00', 3),
-('2026-07-29', '18:00:00', '19:00:00', 3),
--- Business 5 (Beauty Salon Pro)
-('2026-07-29', '10:00:00', '11:00:00', 5),
-('2026-07-29', '14:00:00', '15:00:00', 5),
--- Business 6 (Pet Care Clinic)
-('2026-07-29', '10:00:00', '11:00:00', 6),
-('2026-07-29', '14:00:00', '15:00:00', 6);
+-- Time slots, stamped across a rolling 14-day window (CURRENT_DATE .. CURRENT_DATE + 13),
+-- exactly like BusinessModel.addTimeSlots does when an owner registers a shop through the
+-- app. This is the actual fix: the old version hardcoded '2026-07-29', which silently
+-- fell outside businessModel.findAllWithSlots' 14-day visibility window once that date
+-- was in the past, making these shops look like walk-in-only on the customer home page.
+-- max_capacity is set explicitly here (5) since the column defaults to 1, which would make
+-- every slot "fully booked" after a single ticket - too restrictive for demo/testing data.
+
+-- Business 1: Johns Barber Shop (Siam Branch)
+INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
+SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 1
+FROM generate_series(0, 13) AS day_offset
+CROSS JOIN (VALUES
+  ('10:00'::time, '11:00'::time),
+  ('11:00'::time, '12:00'::time),
+  ('13:00'::time, '14:00'::time)
+) AS v(start_t, end_t);
+
+-- Business 2: Sarah Dental Clinic
+INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
+SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 2
+FROM generate_series(0, 13) AS day_offset
+CROSS JOIN (VALUES
+  ('09:00'::time, '10:00'::time),
+  ('14:00'::time, '15:00'::time)
+) AS v(start_t, end_t);
+
+-- Business 3: Johns Cafe & Bar
+INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
+SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 3
+FROM generate_series(0, 13) AS day_offset
+CROSS JOIN (VALUES
+  ('12:00'::time, '13:00'::time),
+  ('18:00'::time, '19:00'::time)
+) AS v(start_t, end_t);
+
+-- Business 5: Tech Repair Shop (comment in the old file mislabeled this as
+-- "Beauty Salon Pro" - business_id 5 is actually Tech Repair Shop; see the
+-- business_id order note above)
+INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
+SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 5
+FROM generate_series(0, 13) AS day_offset
+CROSS JOIN (VALUES
+  ('10:00'::time, '11:00'::time),
+  ('14:00'::time, '15:00'::time)
+) AS v(start_t, end_t);
+
+-- Business 6: Beauty Salon Pro (old file mislabeled this slot block as
+-- "Pet Care Clinic" - business_id 6 is actually Beauty Salon Pro)
+INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
+SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 6
+FROM generate_series(0, 13) AS day_offset
+CROSS JOIN (VALUES
+  ('10:00'::time, '11:00'::time),
+  ('14:00'::time, '15:00'::time)
+) AS v(start_t, end_t);
 
 -- ====================
 -- TEST CUSTOMERS
@@ -2990,17 +3293,23 @@ INSERT INTO customer (fname, lname, phone_number, email, password) VALUES
 -- ====================
 -- TEST QUEUE TICKETS
 -- ====================
+-- timeslot_id values are resolved with a subquery against (business_id, date, start_time)
+-- instead of hardcoded integers. The old version hardcoded IDs like 1, 3, 6, 8, which
+-- pointed at the WRONG business's slot in a couple of rows (e.g. a ticket queued under
+-- business 2 referenced a time_slot row that actually belonged to business 1) - a
+-- leftover mismatch from when the slot rows were renumbered. Subqueries make this
+-- self-correcting regardless of row order/count.
 INSERT INTO ticket (queue_number, queue_id, timeslot_id, customer_id, status_id) VALUES
 ('Q-001', 1, NULL, 1, 1),
-('Q-002', 1, 1, 2, 1),
+('Q-002', 1, (SELECT timeslot_id FROM time_slot WHERE business_id = 1 AND date = CURRENT_DATE AND start_time = '10:00:00'), 2, 1),
 ('Q-003', 1, NULL, 3, 2),
-('Q-004', 2, 3, 4, 1),
+('Q-004', 2, (SELECT timeslot_id FROM time_slot WHERE business_id = 2 AND date = CURRENT_DATE AND start_time = '09:00:00'), 4, 1),
 ('Q-005', 2, NULL, 5, 1),
 ('Q-006', 2, NULL, 6, 1),
 ('Q-007', 3, NULL, 1, 1),
-('Q-008', 3, 6, 2, 2),
-('Q-009', 5, NULL, 3, 1),
-('Q-010', 6, 8, 4, 1),
+('Q-008', 3, (SELECT timeslot_id FROM time_slot WHERE business_id = 3 AND date = CURRENT_DATE AND start_time = '12:00:00'), 2, 2),
+('Q-009', 5, (SELECT timeslot_id FROM time_slot WHERE business_id = 5 AND date = CURRENT_DATE AND start_time = '10:00:00'), 3, 1),
+('Q-010', 6, (SELECT timeslot_id FROM time_slot WHERE business_id = 6 AND date = CURRENT_DATE AND start_time = '10:00:00'), 4, 1),
 ('Q-011', 4, NULL, 5, 1),
 ('Q-012', 1, NULL, 6, 1);
 
@@ -3160,56 +3469,6 @@ CREATE TABLE payment (
 );
 </file>
 
-<file path=".gitignore">
-node_modules/
-.DS_Store
-.env
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-Thumbs.db
-.DS_Store
-
-# Docker
-.docker/
-</file>
-
-<file path="App/backend/routes/customerRoutes.js">
-const express = require('express');
-const router = express.Router();
-
-const auth = require('../controllers/customerAuthController');
-const business = require('../controllers/businessController');
-const ticket = require('../controllers/ticketController');
-
-router.post('/signup', auth.signup);
-router.post('/login', auth.login);
-
-router.get('/businesses', business.getBusinesses);
-router.get('/categories', business.getCategories);
-
-router.post('/tickets', ticket.createTicket);
-router.get('/tickets/:customerId', ticket.getMyTickets);
-router.patch('/tickets/:ticketId/cancel', ticket.cancelTicket);
-
-router.get('/profile/:id', auth.getProfile);
-router.put('/profile/:id', auth.updateProfile);
-
-router.post('/google-login', auth.googleLogin);
-
-module.exports = router;
-</file>
-
 <file path="App/frontend/src/pages/CustomerHome.jsx">
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -3217,11 +3476,31 @@ import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
 
+// Normalize a date value (may come back as "2026-07-28" or a full ISO timestamp) to "YYYY-MM-DD"
+const toDateKey = (d) => String(d).slice(0, 10);
+
+// Friendly label for a date chip: Today / Tomorrow / "Wed 27"
+const formatDateLabel = (dateKey) => {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((date - today) / 86400000);
+
+  if (diffDays === 0) return { top: 'Today', bottom: `${date.getDate()}/${date.getMonth() + 1}` };
+  if (diffDays === 1) return { top: 'Tomorrow', bottom: `${date.getDate()}/${date.getMonth() + 1}` };
+  return {
+    top: date.toLocaleDateString('en-US', { weekday: 'short' }),
+    bottom: `${date.getDate()}/${date.getMonth() + 1}`
+  };
+};
+
 export default function CustomerHome() {
   const [businesses, setBusinesses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlots, setSelectedSlots] = useState({});
+  const [selectedDates, setSelectedDates] = useState({}); // { [businessId]: 'YYYY-MM-DD' }
   const [paxByBusiness, setPaxByBusiness] = useState({});
 
   // States สำหรับ Search และ Filters
@@ -3279,9 +3558,25 @@ export default function CustomerHome() {
     setCategoryFilter('all');
   };
 
+  // เปลี่ยนวันที่ที่เลือกดูของร้านนั้น -> เคลียร์ slot ที่เลือกไว้ เพราะเป็นคนละวันแล้ว
+  const handleSelectDate = (businessId, dateKey) => {
+    setSelectedDates((prev) => ({ ...prev, [businessId]: dateKey }));
+    setSelectedSlots((prev) => {
+      const next = { ...prev };
+      delete next[businessId];
+      return next;
+    });
+  };
+
   const handleSelectSlot = (businessId, slot) => {
     if (slot.is_booked) return;
     setSelectedSlots((prev) => ({ ...prev, [businessId]: slot.timeslot_id }));
+    // ถ้าจำนวนคนที่ตั้งไว้เดิมเกินที่นั่งที่เหลือของ slot นี้ ให้หดลงมาให้พอดีอัตโนมัติ
+    setPaxByBusiness((prev) => {
+      const current = prev[businessId] || 1;
+      const clamped = Math.max(1, Math.min(current, slot.remaining));
+      return { ...prev, [businessId]: clamped };
+    });
   };
 
   const handleStartBooking = (business) => {
@@ -3567,7 +3862,25 @@ export default function CustomerHome() {
           <div className="grid gap-5 mt-2">
             {filteredBusinesses.map((b) => {
               const isWalkin = b.time_slots.length === 0;
-              const allSlotsBooked = !isWalkin && b.time_slots.every((s) => s.is_booked);
+
+              // วันที่ทั้งหมดที่มี slot จริง เรียงจากใกล้สุดไปไกลสุด ไม่ซ้ำกัน
+              const availableDates = isWalkin
+                ? []
+                : [...new Set(b.time_slots.map((s) => toDateKey(s.date)))].sort();
+
+              const selectedDate = selectedDates[b.business_id] || availableDates[0];
+              const slotsForDate = isWalkin
+                ? []
+                : b.time_slots.filter((s) => toDateKey(s.date) === selectedDate);
+
+              const allSlotsBookedForDate = !isWalkin && slotsForDate.length > 0 && slotsForDate.every((s) => s.is_booked);
+
+              // slot ที่กำลังเลือกอยู่ตอนนี้ (ใช้กำหนดเพดานจำนวนคน)
+              const selectedSlotObj = !isWalkin
+                ? b.time_slots.find((s) => s.timeslot_id === selectedSlots[b.business_id])
+                : null;
+              const maxPax = selectedSlotObj ? selectedSlotObj.remaining : null; // null = ไม่จำกัด (walk-in)
+              const currentPax = paxByBusiness[b.business_id] || 1;
 
               return (
                 <div key={b.business_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow">
@@ -3585,10 +3898,39 @@ export default function CustomerHome() {
                     )}
                   </div>
 
-                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-5 mb-2">Available times</h4>
+                  {!isWalkin && (
+                    <>
+                      {/* --- Date picker: เลือกวันก่อน แล้วค่อยเลือกเวลาของวันนั้น --- */}
+                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-5 mb-2">Pick a date</h4>
+                      <div className="flex gap-2 flex-wrap">
+                        {availableDates.map((dateKey) => {
+                          const label = formatDateLabel(dateKey);
+                          const isActive = dateKey === selectedDate;
+                          return (
+                            <button
+                              key={dateKey}
+                              onClick={() => handleSelectDate(b.business_id, dateKey)}
+                              className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-semibold border min-w-[56px] transition-colors ${
+                                isActive
+                                  ? 'bg-teal-700 dark:bg-teal-600 border-teal-700 dark:border-teal-600 text-white'
+                                  : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-teal-400'
+                              }`}
+                            >
+                              <span>{label.top}</span>
+                              <span className={isActive ? 'text-teal-100' : 'text-slate-400 dark:text-slate-500'}>{label.bottom}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-2">
+                    {isWalkin ? 'Available times' : 'Available times on this date'}
+                  </h4>
                   <div className="flex gap-2 flex-wrap">
                     {!isWalkin ? (
-                      b.time_slots.map((slot) => {
+                      slotsForDate.map((slot) => {
                         const isSelected = selectedSlots[b.business_id] === slot.timeslot_id;
                         return (
                           <button
@@ -3604,7 +3946,7 @@ export default function CustomerHome() {
                                 : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-teal-400'
                             }`}
                           >
-                            {slot.date} ({slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)})
+                            {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)}
                             {slot.is_booked ? ' - full' : ` - ${slot.remaining} left`}
                           </button>
                         );
@@ -3618,20 +3960,38 @@ export default function CustomerHome() {
                    </div>
 
                    <div className="mt-3 flex items-center gap-2">
-                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">People:</span>
-                     <button type="button" onClick={() => setPaxByBusiness((p) => ({ ...p, [b.business_id]: Math.max(1, (p[b.business_id] || 1) - 1) }))} className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold">−</button>
-                     <span className="w-6 text-center font-bold text-slate-800 dark:text-white">{paxByBusiness[b.business_id] || 1}</span>
-                     <button type="button" onClick={() => setPaxByBusiness((p) => ({ ...p, [b.business_id]: (p[b.business_id] || 1) + 1 }))} className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold">+</button>
+                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                       People{maxPax !== null ? ` (max ${maxPax} left)` : ''}:
+                     </span>
+                     <button
+                       type="button"
+                       onClick={() => setPaxByBusiness((p) => ({ ...p, [b.business_id]: Math.max(1, (p[b.business_id] || 1) - 1) }))}
+                       className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold"
+                     >
+                       −
+                     </button>
+                     <span className="w-6 text-center font-bold text-slate-800 dark:text-white">{currentPax}</span>
+                     <button
+                       type="button"
+                       disabled={maxPax !== null && currentPax >= maxPax}
+                       onClick={() => setPaxByBusiness((p) => {
+                         const next = (p[b.business_id] || 1) + 1;
+                         return { ...p, [b.business_id]: maxPax !== null ? Math.min(next, maxPax) : next };
+                       })}
+                       className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                     >
+                       +
+                     </button>
                    </div>
 
                    <button
                     onClick={() => handleStartBooking(b)}
-                    disabled={allSlotsBooked}
+                    disabled={!isWalkin && allSlotsBookedForDate}
                     className={`mt-5 w-full sm:w-auto px-6 py-2.5 rounded-lg font-bold text-white transition-colors shadow-sm ${
-                      allSlotsBooked ? 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed' : 'bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-700'
+                      (!isWalkin && allSlotsBookedForDate) ? 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed' : 'bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-700'
                     }`}
                   >
-                    {allSlotsBooked ? 'Fully booked' : isWalkin ? 'Take a ticket' : 'Confirm booking'}
+                    {(!isWalkin && allSlotsBookedForDate) ? 'Fully booked on this date' : isWalkin ? 'Take a ticket' : 'Confirm booking'}
                   </button>
                 </div>
               );
@@ -3681,215 +4041,6 @@ export default function CustomerHome() {
         )}
       </div>
     </div>
-  );
-}
-</file>
-
-<file path="App/frontend/src/pages/CustomerLogin.jsx">
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google'; 
-import { api } from '../lib/api';
-
-export default function CustomerLogin() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    try {
-      const data = await api.post('/customer/login', { email, password });
-      if (!data.success) return setError(data.message);
-
-      if (data.token) localStorage.setItem('token', data.token);
-      localStorage.setItem('customer_user', JSON.stringify(data.user));
-      navigate('/businesses');
-    } catch {
-      setError('Could not connect to the server.');
-    }
-  };
-
-  const handleGoogleSuccess = async (credentialResponse) => {
-    try {
-      const data = await api.post('/customer/google-login', { 
-        credential: credentialResponse.credential 
-      });
-      
-      if (!data.success) return setError(data.message);
-
-      if (data.token) localStorage.setItem('token', data.token);
-      localStorage.setItem('customer_user', JSON.stringify(data.user));
-      navigate('/businesses');
-    } catch {
-      setError('Google Login Failed. Could not connect to server.');
-    }
-  };
-
-  const handleQuickLogin = () => {
-    setError('');
-    
-    localStorage.setItem('token', 'bypass-test-token');
-    localStorage.setItem('customer_user', JSON.stringify({ 
-      id: 1, 
-      fname: 'John (Tester)', 
-      email: 'john@qflow.com' 
-    }));
-    
-    navigate('/businesses');
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors duration-300">
-      <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-96 transition-colors duration-300">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">Log in to QFlow</h2>
-
-        {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded mb-4 text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
-
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Email</label>
-            <input
-              type="email"
-              required
-              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Password</label>
-            <input
-              type="password"
-              required
-              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          <button type="submit" className="bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition-colors mt-2">
-            Sign in
-          </button>
-
-          <button 
-            type="button" 
-            onClick={handleQuickLogin}
-            className="bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold py-2 px-4 rounded transition-colors"
-          >
-            🚀 Quick Login (Test Customer)
-          </button>
-          <div className="mt-4 flex flex-col items-center gap-3">
-            <div className="relative flex items-center py-2 w-full">
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
-              <span className="flex-shrink-0 mx-4 text-slate-400 dark:text-slate-400 text-sm font-medium">Or</span>
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
-            </div>
-
-            <GoogleLogin 
-              onSuccess={handleGoogleSuccess}
-              onError={() => setError('Google Login Failed')}
-              useOneTap={false}
-              locale="en"
-            />
-          </div>
-        </form>
-
-        <div className="mt-4 text-sm text-center flex flex-col gap-2">
-          <p className="text-slate-700 dark:text-slate-300">
-            No account? <Link to="/signup" className="text-teal-700 dark:text-teal-400 hover:underline">Sign up</Link>
-          </p>
-          <p className="text-slate-500 dark:text-slate-400 text-xs mt-4">
-            Shop owner? <Link to="/owner/login" className="text-teal-700 dark:text-teal-400 hover:underline">Owner login</Link>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="App/frontend/src/App.jsx">
-import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-
-import CustomerLogin from './pages/CustomerLogin';
-import OwnerLogin from './pages/OwnerLogin';
-import CustomerSignUp from './pages/CustomerSignUp';
-import OwnerSignUp from './pages/OwnerSignUp';
-import CustomerHome from './pages/CustomerHome';
-import OwnerHome from './pages/OwnerHome';
-import MyTickets from './pages/MyTickets';
-import CustomerProfile from './pages/CustomerProfile';
-import OwnerProfile from './pages/OwnerProfile';
-import ProtectedRoute from './components/ProtectedRoute';
-
-function DarkModeToggle() {
-  const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved) return saved === 'dark';
-    return false
-  });
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-    if (isDark) {
-      root.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDark]);
-
-  return (
-    <button
-      onClick={() => setIsDark(!isDark)}
-      className="fixed bottom-6 right-6 p-3 rounded-full bg-slate-800 dark:bg-amber-400 text-amber-400 dark:text-slate-900 shadow-xl hover:scale-110 transition-transform duration-300 z-50 flex items-center justify-center"
-      title="Toggle Dark Mode"
-    >
-      {isDark ? (
-        <svg className="w-6 h-6 animate-[spin_4s_linear_infinite]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-      ) : (
-        <svg className="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
-      )}
-    </button>
-  );
-}
-
-export default function App() {
-  return (
-    <BrowserRouter>
-      <DarkModeToggle />
-
-      <Routes>
-        {/* Customer - public */}
-        <Route path="/login" element={<CustomerLogin />} />
-        <Route path="/signup" element={<CustomerSignUp />} />
-
-        {/* Customer - protected */}
-        <Route path="/businesses" element={<ProtectedRoute role="customer"><CustomerHome /></ProtectedRoute>} />
-        <Route path="/tickets" element={<ProtectedRoute role="customer"><MyTickets /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute role="customer"><CustomerProfile /></ProtectedRoute>} />
-
-        {/* Owner - public */}
-        <Route path="/owner/login" element={<OwnerLogin />} />
-        <Route path="/owner/signup" element={<OwnerSignUp />} />
-
-        {/* Owner - protected */}
-        <Route path="/owner/dashboard" element={<ProtectedRoute role="owner"><OwnerHome /></ProtectedRoute>} />
-        <Route path="/owner/businesses/:businessId" element={<ProtectedRoute role="owner"><OwnerHome /></ProtectedRoute>} />
-        <Route path="/owner/profile" element={<ProtectedRoute role="owner"><OwnerProfile /></ProtectedRoute>} />
-
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        {/* path ที่ไม่รู้จักทั้งหมด กันเผื่อ URL มั่ว ให้เด้งกลับหน้า login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
   );
 }
 </file>

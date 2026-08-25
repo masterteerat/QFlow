@@ -33,6 +33,8 @@ exports.getMyBusinesses = async (req, res) => {
   }
 };
 
+// 🟢 แก้: เอาการเช็ค slot.date ออก เพราะระบบเปลี่ยนไปใช้ตารางเวลาประจำวัน (daily template)
+// ที่ stamp ล่วงหน้า 14 วันให้อัตโนมัติใน addTimeSlots() แล้ว ไม่ต้องรับ date จาก client อีกต่อไป
 function validateNewBusiness({ business_name, is_deposit, deposit_amount, queue_type, time_slots }) {
   if (!business_name || !business_name.trim()) return 'Please enter a business name.';
   if (is_deposit && (!deposit_amount || Number(deposit_amount) <= 0)) {
@@ -43,7 +45,7 @@ function validateNewBusiness({ business_name, is_deposit, deposit_amount, queue_
       return 'Please add at least one time slot.';
     }
     for (const slot of time_slots) {
-      if (!slot.date || !slot.start_time || !slot.end_time) return 'Time slot details are incomplete.';
+      if (!slot.start_time || !slot.end_time) return 'Time slot details are incomplete.';
       if (slot.start_time >= slot.end_time) return 'Start time must be before end time for every slot.';
       if (!slot.max_capacity || Number(slot.max_capacity) < 1) return 'Each time slot needs a max capacity of at least 1.';
     }
