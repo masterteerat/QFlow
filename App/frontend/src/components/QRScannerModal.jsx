@@ -4,15 +4,22 @@ import { Html5Qrcode } from "html5-qrcode";
 const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
   const [errorMsg, setErrorMsg] = useState("");
   const [showUpload, setShowUpload] = useState(false);
+
   const scannerRef = useRef(null);
+  const scanHandledRef = useRef(false);
+  const startPromiseRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
 
     setErrorMsg("");
     setShowUpload(false);
+    scanHandledRef.current = false;
 
-    const isSecureContext = window.isSecureContext || window.location.hostname === "localhost";
+    const isSecureContext =
+      window.isSecureContext ||
+      window.location.hostname === "localhost";
+
     if (!isSecureContext) {
       setErrorMsg(
         "Camera not available on HTTP. Use HTTPS, localhost, or upload an image below."
@@ -24,72 +31,165 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
     const html5QrCode = new Html5Qrcode("reader");
     scannerRef.current = html5QrCode;
 
-    let startTimeout;
-    const startScanner = () => {
-      html5QrCode
-        .start(
+    const startScanner = async () => {
+      try {
+        startPromiseRef.current = html5QrCode.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          (decodedText) => {
-            onScanSuccess(decodedText);
-            closeScanner();
+          {
+            fps: 10,
+            qrbox: {
+              width: 250,
+              height: 250,
+            },
           },
-          (errorMessage) => {
-            // Ignore scan errors (no QR in frame)
+          async (decodedText) => {
+            // Prevent the same QR from being processed multiple times
+            if (scanHandledRef.current) return;
+
+            scanHandledRef.current = true;
+
+            console.log("QR Code scanned:", decodedText);
+
+            await closeScanner();
+
+            onScanSuccess(decodedText);
+          },
+          () => {
+            // Ignore scan errors while looking for a QR code
           }
-        )
-        .catch((err) => {
-          setErrorMsg(`Cannot open camera: ${err?.message || "Please allow camera access"}`);
+        );
+
+        await startPromiseRef.current;
+      } catch (err) {
+        console.error("Camera start error:", err);
+
+        if (!scanHandledRef.current) {
+          setErrorMsg(
+            `Cannot open camera: ${
+              err?.message || "Please allow camera access"
+            }`
+          );
           setShowUpload(true);
-        });
+        }
+      }
     };
 
-    startTimeout = setTimeout(startScanner, 300);
+    startScanner();
 
     return () => {
-      clearTimeout(startTimeout);
-      if (html5QrCode.isScanning) {
-        html5QrCode
-          .stop()
-          .then(() => html5QrCode.clear())
-          .catch((err) => console.error("Failed to clear html5Qrcode on unmount", err));
-      } else {
-        html5QrCode.clear();
-      }
+      cleanupScanner(html5QrCode);
     };
   }, [isOpen]);
 
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    setErrorMsg("");
+  /**
+   * Stop and clean up the QR scanner.
+   */
+  const cleanupScanner = async (scanner = scannerRef.current) => {
+    if (!scanner) return;
 
     try {
-      const html5QrCode = scannerRef.current || new Html5Qrcode("reader");
-      const decodedText = await html5Qrcode.scanFile(file, true);
-      onScanSuccess(decodedText);
-      closeScanner();
+      // If scanner is currently running, stop it first.
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+
+      // Clear the scanner UI.
+      scanner.clear();
     } catch (err) {
-      setErrorMsg("Failed to read QR from image. Please use a clearer image.");
-      console.error("File Scan Error:", err);
+      console.error("Failed to clean up QR scanner:", err);
+    }
+
+    if (scannerRef.current === scanner) {
+      scannerRef.current = null;
     }
   };
 
-  const closeScanner = () => {
-    if (scannerRef.current && scannerRef.current.isScanning) {
-      scannerRef.current
-        .stop()
-        .then(() => {
-          scannerRef.current.clear();
-          onClose();
-        })
-        .catch((err) => {
-          console.error("Failed to stop scanner", err);
-          onClose();
-        });
-    } else {
+  /**
+   * Close modal and stop camera.
+   */
+  const closeScanner = async () => {
+    const scanner = scannerRef.current;
+
+    if (!scanner) {
       onClose();
+      return;
+    }
+
+    try {
+      /*
+       * If start() is still in progress, wait for it.
+       * This prevents start() and stop()/clear() from racing.
+       */
+      if (startPromiseRef.current) {
+        try {
+          await startPromiseRef.current;
+        } catch {
+          // start() failed, nothing to stop
+        }
+
+        startPromiseRef.current = null;
+      }
+
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+
+      scanner.clear();
+    } catch (err) {
+      console.error("Failed to stop scanner:", err);
+    } finally {
+      scannerRef.current = null;
+      onClose();
+    }
+  };
+
+  /**
+   * Scan a QR code from an uploaded image.
+   */
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    setErrorMsg("");
+    scanHandledRef.current = false;
+
+    try {
+      /*
+       * Stop camera first if it is running.
+       */
+      if (scannerRef.current?.isScanning) {
+        await scannerRef.current.stop();
+      }
+
+      /*
+       * scanFile() doesn't require the camera scanner to be running.
+       * Use a separate instance so camera and file scanning don't
+       * interfere with each other.
+       */
+      const fileScanner = new Html5Qrcode("qr-file-scanner");
+
+      const decodedText = await fileScanner.scanFile(file, true);
+
+      console.log("QR Code from image:", decodedText);
+
+      scanHandledRef.current = true;
+
+      fileScanner.clear();
+
+      onScanSuccess(decodedText);
+      onClose();
+    } catch (err) {
+      console.error("File Scan Error:", err);
+
+      setErrorMsg(
+        "Failed to read QR from image. Please use a clearer QR Code image."
+      );
+    } finally {
+      /*
+       * Reset file input so the user can select the same file again.
+       */
+      event.target.value = "";
     }
   };
 
@@ -98,27 +198,43 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
-        <h2 style={{ marginTop: 0 }}>Scan QR Code</h2>
+        <h2 style={styles.title}>Scan QR Code</h2>
 
         {errorMsg && <div style={styles.errorBox}>{errorMsg}</div>}
 
+        {/* Camera scanner */}
         {!showUpload && (
           <div id="reader" style={styles.readerContainer}></div>
         )}
 
+        {/* Hidden container used for image scanning */}
+        <div
+          id="qr-file-scanner"
+          style={styles.hiddenScanner}
+        />
+
+        {/* Upload QR image */}
         <div style={styles.uploadSection}>
-          <p style={{ margin: "10px 0 5px", fontWeight: 600 }}>
-            {showUpload ? "📷 Camera unavailable — upload a QR Code image:" : "Or upload a QR Code image:"}
+          <p style={styles.uploadTitle}>
+            {showUpload
+              ? "📷 Camera unavailable — upload a QR Code image:"
+              : "Or upload a QR Code image:"}
           </p>
-          <input 
-            type="file" 
-            accept="image/*" 
-            onChange={handleFileUpload} 
-            style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #ddd", background: "#fff" }}
+
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            style={styles.fileInput}
           />
         </div>
 
-        <button onClick={closeScanner} style={styles.closeButton}>
+        {/* Close */}
+        <button
+          type="button"
+          onClick={closeScanner}
+          style={styles.closeButton}
+        >
           Close
         </button>
       </div>
@@ -128,34 +244,91 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
 
 const styles = {
   overlay: {
-    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
-    display: "flex", justifyContent: "center", alignItems: "center",
-    zIndex: 9999, padding: "20px"
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999,
+    padding: "20px",
   },
+
   modal: {
-    backgroundColor: "#fff", padding: "20px", borderRadius: "8px",
-    width: "100%", maxWidth: "400px", textAlign: "center"
+    backgroundColor: "#fff",
+    padding: "20px",
+    borderRadius: "8px",
+    width: "100%",
+    maxWidth: "400px",
+    textAlign: "center",
   },
+
+  title: {
+    marginTop: 0,
+    marginBottom: "15px",
+  },
+
   readerContainer: {
-    width: "100%", overflow: "hidden", borderRadius: "8px",
-    backgroundColor: "#000", minHeight: "250px"
+    width: "100%",
+    overflow: "hidden",
+    borderRadius: "8px",
+    backgroundColor: "#000",
+    minHeight: "250px",
   },
+
+  /*
+   * html5-qrcode needs an element to exist for scanFile().
+   * It doesn't need to be visible to the user.
+   */
+  hiddenScanner: {
+    display: "none",
+  },
+
   errorBox: {
-    backgroundColor: "#fff3e0", color: "#e65100",
-    padding: "12px", borderRadius: "4px", marginBottom: "15px",
-    fontSize: "14px", border: "1px solid #ffe0b2",
-    textAlign: "left"
+    backgroundColor: "#fff3e0",
+    color: "#e65100",
+    padding: "12px",
+    borderRadius: "4px",
+    marginBottom: "15px",
+    fontSize: "14px",
+    border: "1px solid #ffe0b2",
+    textAlign: "left",
   },
+
   uploadSection: {
-    marginTop: "15px", textAlign: "left", padding: "10px",
-    backgroundColor: "#f5f5f5", borderRadius: "8px"
+    marginTop: "15px",
+    textAlign: "left",
+    padding: "10px",
+    backgroundColor: "#f5f5f5",
+    borderRadius: "8px",
   },
+
+  uploadTitle: {
+    margin: "10px 0 5px",
+    fontWeight: 600,
+  },
+
+  fileInput: {
+    width: "100%",
+    padding: "8px",
+    borderRadius: "4px",
+    border: "1px solid #ddd",
+    background: "#fff",
+  },
+
   closeButton: {
-    marginTop: "20px", padding: "10px 20px",
-    backgroundColor: "#d32f2f", color: "#fff",
-    border: "none", borderRadius: "4px", cursor: "pointer", width: "100%"
-  }
+    marginTop: "20px",
+    padding: "10px 20px",
+    backgroundColor: "#d32f2f",
+    color: "#fff",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+    width: "100%",
+  },
 };
 
 export default QRScannerModal;

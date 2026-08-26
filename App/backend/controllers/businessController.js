@@ -5,8 +5,7 @@ const BusinessModel = require('../models/businessModel');
 exports.getBusinesses = async (req, res) => {
   try {
     const { search, categories } = req.query;
-
-    
+  
     let categoryIds = [];
     if (categories) {
       if (Array.isArray(categories)) {
