@@ -253,10 +253,15 @@ export default function CustomerHome() {
       
       <div className="max-w-3xl mx-auto p-5 relative">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Shops open for booking</h2>
-          <Link to="/tickets" className="px-4 py-2 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-full text-sm font-bold">
-            My tickets
-          </Link>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Shops open for booking</h2>
+          <div className="flex gap-2">
+            <Link to="/schedule" className="px-4 py-2 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-full text-sm font-bold">
+              My schedule
+            </Link>
+            <Link to="/tickets" className="px-4 py-2 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full text-sm font-bold">
+              My tickets
+            </Link>
+          </div>
         </div>
 
         <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mt-4 mb-5 relative">

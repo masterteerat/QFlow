@@ -8,6 +8,7 @@ import OwnerSignUp from './pages/OwnerSignUp';
 import CustomerHome from './pages/CustomerHome';
 import OwnerHome from './pages/OwnerHome';
 import MyTickets from './pages/MyTickets';
+import MySchedule from './pages/MySchedule';
 import CustomerProfile from './pages/CustomerProfile';
 import OwnerProfile from './pages/OwnerProfile';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -60,6 +61,7 @@ export default function App() {
         {/* Customer - protected */}
         <Route path="/businesses" element={<ProtectedRoute role="customer"><CustomerHome /></ProtectedRoute>} />
         <Route path="/tickets" element={<ProtectedRoute role="customer"><MyTickets /></ProtectedRoute>} />
+        <Route path="/schedule" element={<ProtectedRoute role="customer"><MySchedule /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute role="customer"><CustomerProfile /></ProtectedRoute>} />
 
         {/* Owner - public */}
