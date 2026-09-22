@@ -459,25 +459,30 @@ export default function CustomerHome() {
                   {!isWalkin && availableDates.length > 0 && (
                     <>
                       <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-5 mb-2">Pick a date</h4>
-                      <div className="flex gap-2 flex-wrap">
-                        {availableDates.map((dateKey) => {
-                          const label = formatDateLabel(dateKey);
-                          const isActive = dateKey === selectedDate;
-                          return (
-                            <button
-                              key={dateKey}
-                              onClick={() => handleSelectDate(b.business_id, dateKey)}
-                              className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-semibold border min-w-[56px] transition-colors ${
-                                isActive
-                                  ? 'bg-teal-700 dark:bg-teal-600 border-teal-700 dark:border-teal-600 text-white'
-                                  : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-teal-400'
-                              }`}
-                            >
-                              <span>{label.top}</span>
-                              <span className={isActive ? 'text-teal-100' : 'text-slate-400 dark:text-slate-500'}>{label.bottom}</span>
-                            </button>
-                          );
-                        })}
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="date"
+                          value={selectedDate || ''}
+                          min={availableDates[0]}
+                          max={availableDates[availableDates.length - 1]}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (!value) return;
+                            const minDate = availableDates[0];
+                            const maxDate = availableDates[availableDates.length - 1];
+                            if (value < minDate || value > maxDate) {
+                              alert(`Please pick a date between ${minDate} and ${maxDate}.`);
+                              return;
+                            }
+                            handleSelectDate(b.business_id, value);
+                          }}
+                          className="border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm font-semibold dark:[color-scheme:dark]"
+                        />
+                        {selectedDate && (
+                          <span className="text-sm font-semibold text-teal-700 dark:text-teal-400">
+                            {formatDateLabel(selectedDate).top}
+                          </span>
+                        )}
                       </div>
                     </>
                   )}

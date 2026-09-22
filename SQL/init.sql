@@ -46,6 +46,8 @@ CREATE TABLE category (
 CREATE TABLE business (
     business_id    SERIAL PRIMARY KEY,
     business_name  VARCHAR(200) NOT NULL,
+    description    TEXT,
+    image          VARCHAR(255) DEFAULT '/uploads/business/default-business.jpg'
     is_deposit     BOOLEAN DEFAULT FALSE,
     deposit_amount NUMERIC(10, 2) DEFAULT 0.00,
     owner_id       INT REFERENCES owner(owner_id) ON DELETE CASCADE,
@@ -105,7 +107,7 @@ CREATE TABLE payment (
 CREATE TABLE login_otp (
     otp_id      SERIAL PRIMARY KEY,
     email       VARCHAR(255) NOT NULL,
-    role        VARCHAR(20) NOT NULL, -- 'customer' or 'owner'
+    role        VARCHAR(20) NOT NULL,
     otp_code    VARCHAR(6) NOT NULL,
     expires_at  TIMESTAMP NOT NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
