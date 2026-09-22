@@ -172,11 +172,35 @@ const TicketModel = {
   },
 
   // Moves a ticket from one status to another, only if it's currently in fromStatus.
-  transitionStatus: async (ticketId, fromStatus, toStatus) => {
-    const result = await pool.query(
-      `UPDATE ticket SET status_id = $1 WHERE ticket_id = $2 AND status_id = $3 RETURNING *`,
-      [toStatus, ticketId, fromStatus]
-    );
+  // When ownerId is given, the ticket must also belong to a business owned by that owner.
+  // When businessId is given, the ticket must also belong to THAT SPECIFIC business —
+  // this is what stops an owner with multiple shops from checking in a ticket that
+  // belongs to a different one of their shops than the one they currently have open.
+  transitionStatus: async (ticketId, fromStatus, toStatus, ownerId = null, businessId = null) => {
+    let query = `
+      UPDATE ticket t
+      SET status_id = $1
+      FROM queue q
+      JOIN business b ON b.business_id = q.business_id
+      WHERE t.ticket_id = $2
+        AND t.status_id = $3
+        AND t.queue_id = q.queue_id
+    `;
+    const values = [toStatus, ticketId, fromStatus];
+
+    if (ownerId) {
+      values.push(ownerId);
+      query += ` AND b.owner_id = $${values.length}`;
+    }
+
+    if (businessId) {
+      values.push(businessId);
+      query += ` AND q.business_id = $${values.length}`;
+    }
+
+    query += ` RETURNING t.*`;
+
+    const result = await pool.query(query, values);
     return result.rows[0];
   }, // comma to connect next function
 

@@ -47,7 +47,7 @@ CREATE TABLE business (
     business_id    SERIAL PRIMARY KEY,
     business_name  VARCHAR(200) NOT NULL,
     description    TEXT,
-    image          VARCHAR(255) DEFAULT '/uploads/business/default-business.jpg'
+    image          VARCHAR(255) DEFAULT '/uploads/business/default-business.jpg',
     is_deposit     BOOLEAN DEFAULT FALSE,
     deposit_amount NUMERIC(10, 2) DEFAULT 0.00,
     owner_id       INT REFERENCES owner(owner_id) ON DELETE CASCADE,

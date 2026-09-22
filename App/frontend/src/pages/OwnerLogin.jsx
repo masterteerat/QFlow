@@ -10,11 +10,13 @@ export default function OwnerLogin() {
   const [error, setError] = useState('');
   const [showOTP, setShowOTP] = useState(false);
   const [otpEmail, setOtpEmail] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setLoggingIn(true);
 
     try {
       const data = await api.post('/owner/login', { email, password });
@@ -30,6 +32,8 @@ export default function OwnerLogin() {
       }
     } catch {
       setError('Could not connect to the server.');
+    } finally {
+      setLoggingIn(false);
     }
   };
 
@@ -47,16 +51,26 @@ export default function OwnerLogin() {
     if (!data.success) throw new Error(data.message);
   };
 
-  const handleQuickLogin = () => {
+  // Quick Login now asks the backend for a REAL, properly-signed JWT
+  // (via /owner/dev-login) instead of stashing a fake 'bypass-test-token'
+  // string in localStorage. The old fake token could not be verified by
+  // jwt.verify() on the backend, so req.user was never set and anything
+  // behind auth (like scanning a customer's QR to check them in) failed
+  // with "Please log in again" even though the UI looked logged in.
+  const handleQuickLogin = async () => {
     setError('');
-    localStorage.setItem('token', 'bypass-test-token');
-    localStorage.setItem('owner_user', JSON.stringify({ 
-      id: 1, 
-      fname: 'John', 
-      lname: 'Doe', 
-      email: 'john@example.com' 
-    }));
-    navigate('/owner/dashboard');
+    setLoggingIn(true);
+    try {
+      const data = await api.post('/owner/dev-login', {});
+      if (!data.success) return setError(data.message);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('owner_user', JSON.stringify(data.owner));
+      navigate('/owner/dashboard');
+    } catch {
+      setError('Could not connect to the server.');
+    } finally {
+      setLoggingIn(false);
+    }
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
@@ -79,23 +93,28 @@ export default function OwnerLogin() {
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div>
             <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Work email</label>
-            <input type="email" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="email" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={email} onChange={(e) => setEmail(e.target.value)} disabled={loggingIn} />
           </div>
           <div>
             <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Password</label>
-            <input type="password" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input type="password" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={password} onChange={(e) => setPassword(e.target.value)} disabled={loggingIn} />
           </div>
           
-          <button type="submit" className="bg-teal-700 hover:bg-teal-800 text-white font-bold py-2 px-4 rounded mt-2 transition-colors">
-            Sign in
+          <button
+            type="submit"
+            disabled={loggingIn}
+            className="bg-teal-700 hover:bg-teal-800 text-white font-bold py-2 px-4 rounded mt-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loggingIn ? 'Logging in...' : 'Sign in'}
           </button>
 
           <button 
             type="button" 
             onClick={handleQuickLogin}
-            className="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-2 px-4 rounded transition-colors"
+            disabled={loggingIn}
+            className="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Quick Login (Test Owner)
+            {loggingIn ? 'Logging in...' : 'Quick Login (Test Owner)'}
           </button>
           
           <div className="mt-4 flex flex-col items-center gap-3">

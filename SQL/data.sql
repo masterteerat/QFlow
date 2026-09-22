@@ -52,18 +52,18 @@ INSERT INTO owner (fname, lname, phone_number, email, password) VALUES
 -- 4 Mikes Walk-in Barber, 5 Tech Repair Shop, 6 Beauty Salon Pro, 7 Food Express,
 -- 8 Auto Service Center, 9 Fashion Hub, 10 Pet Care Clinic.
 -- Mike's Walk-in Barber (id 4) has no time slots on purpose -> treated as walk-in.
-INSERT INTO business (business_name, is_deposit, deposit_amount, owner_id, category_id) VALUES
-('Johns Barber Shop (Siam Branch)', TRUE, 100.00, 1, 1),
-('Sarah Dental Clinic', FALSE, 0.00, 2, 2),
-('Johns Cafe & Bar', TRUE, 50.00, 1, 3),
-('Mikes Walk-in Barber', FALSE, 0.00, 3, 1),
+INSERT INTO business (business_name, description, image, is_deposit, deposit_amount, owner_id, category_id) VALUES
+('Johns Barber Shop (Siam Branch)', 'Premium barber services in the heart of Siam. Offering haircuts, fades, and styling for all ages.', '/uploads/business/default-business.jpg', TRUE, 100.00, 1, 1),
+('Sarah Dental Clinic', 'Expert dental care with modern equipment. Specializing in cosmetic dentistry and preventive care.', '/uploads/business/default-business.jpg', FALSE, 0.00, 2, 2),
+('Johns Cafe & Bar', 'Cozy cafe and bar serving specialty coffee, fresh pastries, and craft cocktails in a relaxed atmosphere.', '/uploads/business/default-business.jpg', TRUE, 50.00, 1, 3),
+('Mikes Walk-in Barber', 'Quick and affordable walk-in barber shop. No appointment needed, just walk in and get styled.', '/uploads/business/default-business.jpg', FALSE, 0.00, 3, 1),
 -- Additional businesses for search/filter testing
-('Tech Repair Shop', TRUE, 50.00, 4, 11),
-('Beauty Salon Pro', FALSE, 0.00, 5, 9),
-('Food Express', FALSE, 0.00, 6, 12),
-('Auto Service Center', TRUE, 75.00, 4, 15),
-('Fashion Hub', TRUE, 25.00, 5, 14),
-('Pet Care Clinic', TRUE, 30.00, 6, 13);
+('Tech Repair Shop', 'Professional tech repair services for phones, laptops, and tablets. Fast turnaround guaranteed.', '/uploads/business/default-business.jpg', TRUE, 50.00, 4, 11),
+('Beauty Salon Pro', 'Full-service beauty salon offering hair, nails, skincare, and makeup services by licensed professionals.', '/uploads/business/default-business.jpg', FALSE, 0.00, 5, 9),
+('Food Express', 'Fast and delicious food delivery. Wide variety of cuisines delivered straight to your door.', '/uploads/business/default-business.jpg', FALSE, 0.00, 6, 12),
+('Auto Service Center', 'Trusted auto repair and maintenance center. Oil changes, brakes, engines, and more.', '/uploads/business/default-business.jpg', TRUE, 75.00, 4, 15),
+('Fashion Hub', 'Trendy fashion store with the latest clothing, accessories, and footwear for men and women.', '/uploads/business/default-business.jpg', TRUE, 25.00, 5, 14),
+('Pet Care Clinic', 'Full-service veterinary clinic offering wellness exams, vaccinations, and surgical care for pets.', '/uploads/business/default-business.jpg', TRUE, 30.00, 6, 13);
 
 INSERT INTO subscription (start_date, end_date, business_id, plan_id, substatus_id) VALUES
 (CURRENT_DATE, CURRENT_DATE + 30, 1, 2, 1),

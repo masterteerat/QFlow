@@ -10,11 +10,13 @@ export default function CustomerLogin() {
   const [error, setError] = useState('');
   const [showOTP, setShowOTP] = useState(false);
   const [otpEmail, setOtpEmail] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setLoggingIn(true);
 
     try {
       const data = await api.post('/customer/login', { email, password });
@@ -30,6 +32,8 @@ export default function CustomerLogin() {
       }
     } catch {
       setError('Could not connect to the server.');
+    } finally {
+      setLoggingIn(false);
     }
   };
 
@@ -62,15 +66,25 @@ export default function CustomerLogin() {
     }
   };
 
-  const handleQuickLogin = () => {
+  // Quick Login now asks the backend for a REAL, properly-signed JWT
+  // (via /customer/dev-login) instead of stashing a fake 'bypass-test-token'
+  // string in localStorage. The old fake token could not be verified by
+  // jwt.verify() on the backend, so any authenticated request made while
+  // "quick logged in" would silently fail auth server-side.
+  const handleQuickLogin = async () => {
     setError('');
-    localStorage.setItem('token', 'bypass-test-token');
-    localStorage.setItem('customer_user', JSON.stringify({ 
-      id: 1, 
-      fname: 'John (Tester)', 
-      email: 'john@qflow.com' 
-    }));
-    navigate('/businesses');
+    setLoggingIn(true);
+    try {
+      const data = await api.post('/customer/dev-login', {});
+      if (!data.success) return setError(data.message);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('customer_user', JSON.stringify(data.user));
+      navigate('/businesses');
+    } catch {
+      setError('Could not connect to the server.');
+    } finally {
+      setLoggingIn(false);
+    }
   };
 
   return (
@@ -89,6 +103,7 @@ export default function CustomerLogin() {
               className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={loggingIn}
             />
           </div>
 
@@ -100,19 +115,25 @@ export default function CustomerLogin() {
               className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loggingIn}
             />
           </div>
 
-          <button type="submit" className="bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition-colors mt-2">
-            Sign in
+          <button
+            type="submit"
+            disabled={loggingIn}
+            className="bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loggingIn ? 'Logging in...' : 'Sign in'}
           </button>
 
           <button 
             type="button" 
             onClick={handleQuickLogin}
-            className="bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold py-2 px-4 rounded transition-colors"
+            disabled={loggingIn}
+            className="bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Quick Login (Test Customer)
+            {loggingIn ? 'Logging in...' : 'Quick Login (Test Customer)'}
           </button>
           <div className="mt-4 flex flex-col items-center gap-3">
             <div className="relative flex items-center py-2 w-full">

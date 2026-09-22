@@ -5,8 +5,8 @@ import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
 import { useToast } from '../context/ToastContext';
 
-const HOUR_HEIGHT = 64; // px ต่อ 1 ชั่วโมงบน grid
-const DAYS_AHEAD = 14;  // ให้ตรงกับ booking window ของร้าน (ดู CustomerHome.jsx)
+const HOUR_HEIGHT = 64;
+const DAYS_AHEAD = 14;
 
 const STATUS_COLORS = {
   Waiting:   { bg: 'bg-amber-500',   border: 'border-amber-600',   text: 'text-white' },
@@ -15,33 +15,53 @@ const STATUS_COLORS = {
   Cancelled: { bg: 'bg-rose-300',    border: 'border-rose-400',    text: 'text-rose-900' }
 };
 
-const toDateKey = (d) => String(d).slice(0, 10);
+const toDateKey = (d) => {
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 const parseMinutes = (hhmmss) => {
-  const [h, m] = hhmmss.split(':').map(Number);
+  if (!hhmmss || hhmmss === '-') return 0;
+  const parts = String(hhmmss).split(':');
+  const h = Number(parts[0]) || 0;
+  const m = Number(parts[1]) || 0;
   return h * 60 + m;
 };
 
-const formatDayChip = (dateKey) => {
+const formatDateKey = (dateKey) => {
+  if (!dateKey || dateKey.length !== 10) return '';
   const [y, m, d] = dateKey.split('-').map(Number);
   const date = new Date(y, m - 1, d);
+  if (isNaN(date.getTime())) return '';
+  return date;
+};
+
+const shiftDate = (dateKey, days) => {
+  const d = formatDateKey(dateKey) || new Date();
+  d.setDate(d.getDate() + days);
+  return toDateKey(d);
+};
+
+const formatDayChip = (dateKey) => {
+  const date = formatDateKey(dateKey);
+  if (!date) return { top: '?', bottom: '??', weekday: '?' };
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const diffDays = Math.round((date - today) / 86400000);
   const top = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Tomorrow' : date.toLocaleDateString('en-US', { weekday: 'short' });
-  return { top, bottom: `${date.getDate()}/${date.getMonth() + 1}`, weekday: date.toLocaleDateString('en-US', { weekday: 'long' }) };
+  return { top, bottom: `${date.getDate()}/${date.getMonth() + 1}`, weekday: date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) };
 };
 
-// จัด "lane" ให้คิวที่เวลาซ้อนทับกัน (เช่นจองสองร้านเวลาใกล้กัน) ให้เรียงข้างกันแทนที่จะทับกัน
 function assignLanes(events) {
   const sorted = [...events].sort((a, b) => a.startMin - b.startMin);
   const laneEnds = [];
   sorted.forEach((ev) => {
     let lane = laneEnds.findIndex((end) => end <= ev.startMin);
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(ev.endMin);
-    } else {
-      laneEnds[lane] = ev.endMin;
-    }
+    if (lane === -1) { lane = laneEnds.length; laneEnds.push(ev.endMin); }
+    else { laneEnds[lane] = ev.endMin; }
     ev.lane = lane;
   });
   const totalLanes = Math.max(1, laneEnds.length);
@@ -60,19 +80,11 @@ export default function MySchedule() {
   const { toast } = useToast();
 
   const fetchTickets = useCallback(async () => {
-    if (!customer?.id) {
-      setErrorMsg('Please log in again.');
-      setLoading(false);
-      return;
-    }
+    if (!customer?.id) { setErrorMsg('Please log in again.'); setLoading(false); return; }
     try {
       const data = await api.get(`/customer/tickets/${customer.id}`);
-      if (data.success) {
-        setTickets(data.data);
-        setErrorMsg('');
-      } else {
-        setErrorMsg(data.message || 'Could not load your schedule.');
-      }
+      if (data.success) { setTickets(data.data); setErrorMsg(''); }
+      else { setErrorMsg(data.message || 'Could not load your schedule.'); }
     } catch (error) {
       console.error('Fetch schedule error:', error);
       setErrorMsg('Could not reach the server.');
@@ -92,13 +104,8 @@ export default function MySchedule() {
     if (!window.confirm('Cancel this ticket? Your slot will be released right away.')) return;
     try {
       const result = await api.patch(`/customer/tickets/${ticketId}/cancel`, { customer_id: customer.id });
-      if (result.success) {
-        toast.success('Ticket cancelled');
-        setActiveTicket(null);
-        fetchTickets();
-      } else {
-        toast.error(result.message);
-      }
+      if (result.success) { toast.success('Ticket cancelled'); setActiveTicket(null); fetchTickets(); }
+      else { toast.error(result.message); }
     } catch (error) {
       console.error('Cancel ticket error:', error);
       toast.error('Could not reach the server.');
@@ -108,11 +115,19 @@ export default function MySchedule() {
   const timedTickets = tickets.filter((t) => t.start_time !== '-');
   const walkinTickets = tickets.filter((t) => t.start_time === '-');
 
+  const today = toDateKey(new Date());
+
+  const datesWithBookings = useMemo(() => {
+    const set = new Set();
+    timedTickets.forEach((t) => set.add(toDateKey(t.date)));
+    return set;
+  }, [timedTickets]);
+
   const dateKeys = useMemo(() => {
     const set = new Set();
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0);
     for (let i = 0; i < DAYS_AHEAD; i++) {
-      const d = new Date(today); d.setDate(today.getDate() + i);
+      const d = new Date(todayDate); d.setDate(todayDate.getDate() + i);
       set.add(toDateKey(d));
     }
     timedTickets.forEach((t) => set.add(toDateKey(t.date)));
@@ -129,8 +144,7 @@ export default function MySchedule() {
     return map;
   }, [timedTickets]);
 
-  const todayKey = toDateKey(new Date());
-  const todaysActiveCount = (ticketsByDate[todayKey] || [])
+  const todaysActiveCount = (ticketsByDate[today] || [])
     .filter((t) => ['Waiting', 'Serving'].includes(t.status_name)).length;
 
   const dayTickets = ticketsByDate[selectedDate] || [];
@@ -140,7 +154,7 @@ export default function MySchedule() {
       ...t,
       startMin: parseMinutes(t.start_time),
       endMin: parseMinutes(t.end_time)
-    }));
+    })).filter((t) => t.startMin > 0 || t.endMin > 0);
     return assignLanes(withMinutes);
   }, [dayTickets]);
 
@@ -177,7 +191,6 @@ export default function MySchedule() {
           </div>
         )}
 
-        {/* Reminder banner */}
         <div className={`mb-5 p-4 rounded-lg border flex items-center gap-3 ${
           todaysActiveCount > 0
             ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
@@ -191,42 +204,50 @@ export default function MySchedule() {
           </span>
         </div>
 
-        {/* Date strip */}
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
-          {dateKeys.map((dateKey) => {
-            const label = formatDayChip(dateKey);
-            const isActive = dateKey === selectedDate;
-            const count = (ticketsByDate[dateKey] || [])
-              .filter((t) => ['Waiting', 'Serving'].includes(t.status_name)).length;
-            return (
-              <button
-                key={dateKey}
-                onClick={() => setSelectedDate(dateKey)}
-                className={`relative flex flex-col items-center px-3 py-2 rounded-lg text-xs font-semibold border min-w-[56px] shrink-0 transition-colors ${
-                  isActive
-                    ? 'bg-teal-700 dark:bg-teal-600 border-teal-700 dark:border-teal-600 text-white'
-                    : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-teal-400'
-                }`}
-              >
-                <span>{label.top}</span>
-                <span className={isActive ? 'text-teal-100' : 'text-slate-400 dark:text-slate-500'}>{label.bottom}</span>
-                {count > 0 && (
-                  <span className={`absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold ${
-                    isActive ? 'bg-white text-teal-700' : 'bg-teal-600 text-white'
-                  }`}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Date picker (native OS calendar) */}
+        <div className="mb-2 flex items-center gap-2">
+          <button
+            onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
+            className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-semibold transition-colors"
+            aria-label="Previous day"
+          >
+            &lt;
+          </button>
+
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+            className="flex-1 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:border-teal-500"
+          />
+
+          <button
+            onClick={() => setSelectedDate(shiftDate(selectedDate, 1))}
+            className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-semibold transition-colors"
+            aria-label="Next day"
+          >
+            &gt;
+          </button>
+
+          {selectedDate !== today && (
+            <button
+              onClick={() => setSelectedDate(today)}
+              className="px-3 py-2 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 text-sm font-semibold transition-colors"
+            >
+              Today
+            </button>
+          )}
         </div>
+
+        {datesWithBookings.has(selectedDate) && (
+          <p className="text-xs text-teal-600 dark:text-teal-400 mb-4">● You have bookings on this day</p>
+        )}
 
         {/* Time grid */}
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
             <h3 className="font-bold text-slate-800 dark:text-white">
-              {formatDayChip(selectedDate).weekday}, {selectedDate}
+              {formatDayChip(selectedDate).weekday}
             </h3>
           </div>
 
@@ -265,15 +286,10 @@ export default function MySchedule() {
                       key={ev.ticket_id}
                       onClick={() => setActiveTicket(ev)}
                       className={`absolute rounded-md px-2 py-1 text-left text-xs shadow-sm border overflow-hidden hover:opacity-90 transition-opacity ${colors.bg} ${colors.border} ${colors.text}`}
-                      style={{
-                        top,
-                        height,
-                        left: `${ev.lane * widthPct}%`,
-                        width: `calc(${widthPct}% - 4px)`
-                      }}
+                      style={{ top, height, left: `${ev.lane * widthPct}%`, width: `calc(${widthPct}% - 4px)` }}
                     >
                       <div className="font-bold truncate">{ev.business_name}</div>
-                      <div className="truncate opacity-90">{ev.start_time.slice(0, 5)}-{ev.end_time.slice(0, 5)}</div>
+                      <div className="truncate opacity-90">{ev.start_time?.slice(0, 5)}-{ev.end_time?.slice(0, 5)}</div>
                       <div className="truncate opacity-90">#{ev.queue_number}</div>
                     </button>
                   );
@@ -283,7 +299,6 @@ export default function MySchedule() {
           )}
         </div>
 
-        {/* คิว walk-in ไม่มีเวลาแน่นอน วางบน grid ไม่ได้ เลยแยกไว้ด้านล่าง */}
         {walkinTickets.filter((t) => ['Waiting', 'Serving'].includes(t.status_name)).length > 0 && (
           <div className="mt-6">
             <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Walk-in queues (no fixed time)</h4>
@@ -305,7 +320,6 @@ export default function MySchedule() {
         )}
       </div>
 
-      {/* Ticket detail modal */}
       {activeTicket && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setActiveTicket(null)}>
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
@@ -316,7 +330,7 @@ export default function MySchedule() {
             <p className="text-3xl font-bold text-slate-800 dark:text-white mb-2">{activeTicket.queue_number}</p>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
               {activeTicket.start_time && activeTicket.start_time !== '-'
-                ? `${new Date(activeTicket.date).toLocaleDateString('en-GB')} · ${activeTicket.start_time.slice(0, 5)} - ${activeTicket.end_time.slice(0, 5)}`
+                ? `${toDateKey(activeTicket.date)?.replace(/-/g, '/') || ''} · ${activeTicket.start_time?.slice(0, 5)} - ${activeTicket.end_time?.slice(0, 5)}`
                 : 'Walk-in queue (no fixed time)'}
             </p>
             <span className="inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">

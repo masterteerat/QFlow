@@ -5,8 +5,7 @@ const { STATUS } = TicketModel;
 
 const SECRET_KEY = process.env.QR_SECRET || 'your-secret-key-2026';
 
-function generateSignedPayload(ticketId) {
-  const timestamp = Date.now();
+function generateSignedPayload(ticketId, timestamp) {
   const signature = crypto
     .createHmac('sha256', SECRET_KEY)
     .update(`${ticketId}:${timestamp}`)
@@ -99,7 +98,10 @@ exports.createTicket = async (req, res) => {
     }
 
     const fullTicket = await TicketModel.findFullTicket(ticket.ticket_id);
-    res.status(201).json({ success: true, message: 'Booking successful', data: fullTicket });
+    const qrTimestamp = new Date(fullTicket.created_at).getTime();
+    const qr_payload = generateSignedPayload(fullTicket.ticket_id, qrTimestamp);
+
+    res.status(201).json({ success: true, message: 'Booking successful', data: { ...fullTicket, qr_payload } });
   } catch (error) {
     console.error('Create ticket error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -121,10 +123,13 @@ exports.getMyTickets = async (req, res) => {
   try {
     const tickets = await TicketModel.findByCustomer(req.params.customerId);
     
-    const ticketsWithQR = tickets.map((t) => ({
-      ...t,
-      qr_payload: generateSignedPayload(t.ticket_id),
-    }));
+    const ticketsWithQR = tickets.map((t) => {
+      const qrTimestamp = new Date(t.created_at).getTime();
+      return {
+        ...t,
+        qr_payload: generateSignedPayload(t.ticket_id, qrTimestamp),
+      };
+    });
 
     res.json({ success: true, data: ticketsWithQR });
   } catch (error) {
@@ -166,9 +171,25 @@ exports.getQueueList = async (req, res) => {
   }
 };
 
+// Moves a ticket between statuses, scoped to both the logged-in owner AND the
+// specific shop currently open on their dashboard (req.body.business_id).
+// Without the business_id check, an owner with multiple shops could scan a
+// QR code / trigger an action for a ticket belonging to a DIFFERENT one of
+// their shops while viewing an unrelated shop's queue page, and it would
+// silently succeed because the old query only checked b.owner_id.
 async function transition(req, res, { from, to, notFoundMessage }) {
+  const ownerId = req.user?.id;
+  if (!ownerId) {
+    return res.status(401).json({ success: false, message: 'Please log in again.' });
+  }
+
+  const businessId = req.body?.business_id;
+  if (!businessId) {
+    return res.status(400).json({ success: false, message: 'Missing shop reference. Please refresh and try again.' });
+  }
+
   try {
-    const ticket = await TicketModel.transitionStatus(req.params.ticketId, from, to);
+    const ticket = await TicketModel.transitionStatus(req.params.ticketId, from, to, ownerId, businessId);
     if (!ticket) {
       return res.status(400).json({ success: false, message: notFoundMessage });
     }
@@ -179,39 +200,51 @@ async function transition(req, res, { from, to, notFoundMessage }) {
   }
 }
 
-// PATCH /api/owner/tickets/:ticketId/checkin
+// PATCH /api/owner/tickets/:ticketId/checkin - scanning a customer's QR code
 exports.checkInTicket = async (req, res) => {
   const { timestamp, signature } = req.body;
   const ticketId = req.params.ticketId;
 
-  if (timestamp && signature) {
-    const expectedSignature = crypto
-      .createHmac('sha256', SECRET_KEY)
-      .update(`${ticketId}:${timestamp}`)
-      .digest('hex');
+  if (!timestamp || !signature) {
+    return res.status(400).json({ success: false, message: 'QR Code data is missing or invalid.' });
+  }
 
-    if (signature !== expectedSignature) {
-      return res.status(400).json({ success: false, message: 'QR Code is invalid or has been forged!' });
-    }
+  const expectedSignature = crypto
+    .createHmac('sha256', SECRET_KEY)
+    .update(`${ticketId}:${timestamp}`)
+    .digest('hex');
+
+  if (signature !== expectedSignature) {
+    return res.status(400).json({ success: false, message: 'QR Code is invalid or has been forged!' });
   }
 
   return transition(req, res, {
     from: STATUS.WAITING,
     to: STATUS.SERVING,
-    notFoundMessage: 'This ticket is not waiting anymore.'
+    notFoundMessage: 'This ticket is not waiting anymore, or belongs to a different shop.'
   });
 };
+
+// PATCH /api/owner/tickets/:ticketId/manual-checkin - staff checking someone in
+// by hand, with no QR code involved. Separate from checkInTicket above so the
+// QR-based route can require a valid signature unconditionally.
+exports.manualCheckInTicket = (req, res) =>
+  transition(req, res, {
+    from: STATUS.WAITING,
+    to: STATUS.SERVING,
+    notFoundMessage: 'This ticket is not waiting anymore, or belongs to a different shop.'
+  });
 
 exports.completeTicket = (req, res) =>
   transition(req, res, {
     from: STATUS.SERVING,
     to: STATUS.COMPLETED,
-    notFoundMessage: 'This ticket is not being served.'
+    notFoundMessage: 'This ticket is not being served, or belongs to a different shop.'
   });
 
 exports.noShowTicket = (req, res) =>
   transition(req, res, {
     from: STATUS.WAITING,
     to: STATUS.CANCELLED,
-    notFoundMessage: 'Could not mark this ticket as a no-show.'
+    notFoundMessage: 'Could not mark this ticket as a no-show, or it belongs to a different shop.'
   });

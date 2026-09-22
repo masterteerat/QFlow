@@ -1,12 +1,13 @@
 const pool = require('../config/db');
 
 const BusinessModel = {
-  // Public list for customers, with each slot flagged as booked or free.
   findAllWithSlots: async ({ search, categoryIds } = {}) => {
     let query = `
       SELECT
         b.business_id,
         b.business_name,
+        b.description,
+        b.image,
         b.is_deposit,
         b.deposit_amount,
         c.name AS category_name,
@@ -41,20 +42,18 @@ const BusinessModel = {
     
     const params = [];
 
-    // Add category filter (accepts array)
     if (categoryIds && categoryIds.length > 0) {
       params.push(categoryIds);
       query += ` AND b.category_id = ANY($${params.length}::int[])`;
     }
 
-    // Add search filter for shop name
     if (search) {
       params.push(`%${search}%`);
       query += ` AND b.business_name ILIKE $${params.length}`;
     }
 
     query += `
-      GROUP BY b.business_id, c.category_id, c.name
+      GROUP BY b.business_id, c.category_id, c.name, b.description, b.image
       ORDER BY b.business_id ASC;
     `;
 
@@ -62,41 +61,96 @@ const BusinessModel = {
     return result.rows;
   },
 
-  // Get all categories
   findAllCategories: async () => {
     const result = await pool.query('SELECT * FROM category ORDER BY name ASC');
     return result.rows;
   },
 
-  // Shops belonging to one owner, with today's waiting/serving counts.
+  findById: async (businessId) => {
+    const result = await pool.query(
+      `SELECT b.*, c.name AS category_name, c.category_id
+       FROM business b
+       LEFT JOIN category c ON c.category_id = b.category_id
+       WHERE b.business_id = $1`,
+      [businessId]
+    );
+    const business = result.rows[0];
+    if (!business) return null;
+    const slotsResult = await pool.query(
+      `SELECT timeslot_id, date, start_time, end_time, max_capacity
+       FROM time_slot WHERE business_id = $1 AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE ORDER BY date ASC, start_time ASC`,
+      [businessId]
+    );
+    business.queue_type = slotsResult.rows.length > 0 ? 'timeslot' : 'walkin';
+    business.time_slots = slotsResult.rows;
+    return business;
+  },
+
   findByOwner: async (ownerId) => {
     const query = `
       SELECT
         b.business_id,
         b.business_name,
+        b.description,
+        b.image,
         b.is_deposit,
         b.deposit_amount,
         c.name AS category_name,
+        c.category_id,
         COUNT(t.ticket_id) FILTER (WHERE t.status_id = 1) AS waiting_count,
         COUNT(t.ticket_id) FILTER (WHERE t.status_id = 2) AS serving_count
       FROM business b
       LEFT JOIN category c ON c.category_id = b.category_id
-LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
+      LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
       LEFT JOIN ticket t ON t.queue_id = q.queue_id
       WHERE b.owner_id = $1
-      GROUP BY b.business_id, c.category_id
+      GROUP BY b.business_id, c.category_id, c.name, b.description, b.image
       ORDER BY b.business_id ASC;
     `;
     const result = await pool.query(query, [ownerId]);
     return result.rows;
   },
 
-  create: async (client, { business_name, is_deposit, deposit_amount, owner_id, category_id }) => {
+  create: async (client, { business_name, description, image, is_deposit, deposit_amount, owner_id, category_id }) => {
     const result = await client.query(
-      `INSERT INTO business (business_name, is_deposit, deposit_amount, owner_id, category_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO business (business_name, description, image, is_deposit, deposit_amount, owner_id, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [business_name, is_deposit, deposit_amount, owner_id, category_id || null]
+      [business_name, description || null, image || '/uploads/business/default-business.jpg', is_deposit, deposit_amount, owner_id, category_id || null]
+    );
+    return result.rows[0];
+  },
+
+  update: async (client, { businessId, business_name, description, image, is_deposit, deposit_amount, category_id }) => {
+    const fields = [];
+    const values = [];
+    let paramIdx = 1;
+
+    fields.push(`business_name = $${paramIdx++}`);
+    values.push(business_name);
+
+    if (image !== undefined) {
+      fields.push(`image = $${paramIdx++}`);
+      values.push(image);
+    }
+
+    fields.push(`description = $${paramIdx++}`);
+    values.push(description);
+
+    fields.push(`is_deposit = $${paramIdx++}`);
+    values.push(is_deposit);
+
+    fields.push(`deposit_amount = $${paramIdx++}`);
+    values.push(deposit_amount);
+
+    fields.push(`category_id = $${paramIdx++}`);
+    values.push(category_id || null);
+
+    values.push(businessId);
+
+    const result = await client.query(
+      `UPDATE business SET ${fields.join(', ')} WHERE business_id = $${paramIdx} RETURNING *`,
+      values
     );
     return result.rows[0];
   },
@@ -138,12 +192,11 @@ LEFT JOIN queue q ON q.business_id = b.business_id AND q.date = (NOW() AT TIME Z
     return result.rows;
   },
 
-  // Current daily template — dedupe by time since every day repeats the same blocks
   getSchedule: async (businessId) => {
     const result = await pool.query(
       `SELECT DISTINCT start_time, end_time, max_capacity
        FROM time_slot
-WHERE business_id = $1 AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
+ WHERE business_id = $1 AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
        ORDER BY start_time ASC`,
       [businessId]
     );
@@ -153,11 +206,11 @@ WHERE business_id = $1 AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
   updateSchedule: async (client, businessId, slots) => {
     await client.query(
       `DELETE FROM time_slot
-       WHERE business_id = $1
-AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
-         AND timeslot_id NOT IN (
-           SELECT timeslot_id FROM ticket WHERE timeslot_id IS NOT NULL
-         )`,
+        WHERE business_id = $1
+ AND date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::DATE
+           AND timeslot_id NOT IN (
+             SELECT timeslot_id FROM ticket WHERE timeslot_id IS NOT NULL
+           )`,
       [businessId]
     );
 

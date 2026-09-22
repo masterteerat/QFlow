@@ -1,9 +1,35 @@
 import { useEffect, useState } from 'react';
+
+function ShopThumbnail({ src, alt }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <div className="w-full h-48 shrink-0 bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+        <svg className="w-14 h-14 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-48 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+      <img
+        src={src}
+        alt={alt}
+        onError={() => setFailed(true)}
+        className="block w-full h-full object-contain"
+      />
+    </div>
+  );
+}
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
 import { useToast } from '../context/ToastContext';
+import { QRCodeSVG } from 'qrcode.react';
 
 // Normalize a date value to "YYYY-MM-DD"
 const toDateKey = (d) => String(d).slice(0, 10);
@@ -46,16 +72,6 @@ export default function CustomerHome() {
   const { toast } = useToast();
 
   
-  const todayDateObj = new Date();
-  todayDateObj.setHours(0, 0, 0, 0);
-  
-  const maxDateObj = new Date(todayDateObj);
-  maxDateObj.setDate(todayDateObj.getDate() + 14);
-
-  useEffect(() => {
-    Promise.all([fetchBusinesses(), fetchCategories()]);
-  }, []);
-
   const fetchBusinesses = async () => {
     try {
       const data = await api.get('/customer/businesses');
@@ -75,6 +91,17 @@ export default function CustomerHome() {
       setLoading(false);
     }
   };
+
+  const todayDateObj = new Date();
+  todayDateObj.setHours(0, 0, 0, 0);
+  
+  const maxDateObj = new Date(todayDateObj);
+  maxDateObj.setDate(todayDateObj.getDate() + 14);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    Promise.all([fetchBusinesses(), fetchCategories()]);
+  }, []);
 
   const handleCategoryToggle = (catId) => {
     setCategoryFilter((prev) =>
@@ -204,6 +231,15 @@ export default function CustomerHome() {
               {ticket.status_name}
             </span>
           </div>
+
+          {ticket.qr_payload && (
+            <div className="flex flex-col items-center gap-2 my-5">
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shrink-0">
+                <QRCodeSVG value={ticket.qr_payload} size={160} level="H" />
+              </div>
+              <p className="text-slate-400 dark:text-slate-500 text-xs">Show this QR code to staff to check in</p>
+            </div>
+          )}
 
           <div className="text-left space-y-2 border-t border-slate-100 dark:border-slate-700 pt-4 text-slate-700 dark:text-slate-300">
             <p><span className="font-semibold text-slate-800 dark:text-white">Shop:</span> {ticket.business_name}</p>
@@ -440,23 +476,28 @@ export default function CustomerHome() {
               const maxPax = selectedSlotObj ? selectedSlotObj.remaining : null;
               const currentPax = paxByBusiness[b.business_id] || 1;
 
-              return (
-                <div key={b.business_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-800 dark:text-white">{b.business_name}</h3>
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-semibold rounded">
-                        {b.category_name}
-                      </span>
-                    </div>
-                    {b.is_deposit ? (
-                      <span className="text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded text-xs font-bold border border-amber-100 dark:border-amber-800">Deposit: ฿{b.deposit_amount}</span>
-                    ) : (
-                      <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded text-xs font-bold border border-emerald-100 dark:border-emerald-800">Free booking</span>
-                    )}
-                  </div>
+                 return (
+                  <div key={b.business_id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                    <ShopThumbnail src={b.image} alt={b.business_name} />
+                    <div className="p-5">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-800 dark:text-white">{b.business_name}</h3>
+                          {b.description && (
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">{b.description}</p>
+                          )}
+                          <span className="inline-block mt-2 px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-semibold rounded">
+                            {b.category_name}
+                          </span>
+                        </div>
+                        {b.is_deposit ? (
+                          <span className="text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded text-xs font-bold border border-amber-100 dark:border-amber-800">Deposit: ฿{b.deposit_amount}</span>
+                        ) : (
+                          <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded text-xs font-bold border border-emerald-100 dark:border-emerald-800">Free booking</span>
+                        )}
+                      </div>
 
-                  {!isWalkin && availableDates.length > 0 && (
+                      {!isWalkin && availableDates.length > 0 && (
                     <>
                       <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-5 mb-2">Pick a date</h4>
                       <div className="flex items-center gap-3">
@@ -559,15 +600,16 @@ export default function CustomerHome() {
                           (!isWalkin && allSlotsBookedForDate) ? 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed' : 'bg-teal-700 dark:bg-teal-600 hover:bg-teal-800 dark:hover:bg-teal-700'
                         }`}
                       >
-                        {(!isWalkin && allSlotsBookedForDate) ? 'Fully booked on this date' : isWalkin ? 'Take a ticket' : 'Confirm booking'}
+                        Book
                       </button>
                     </>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
         {paymentModal && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

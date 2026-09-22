@@ -7,6 +7,7 @@ const ticket = require('../controllers/ticketController');
 
 router.post('/signup', auth.signup);
 router.post('/login', auth.login);
+router.post('/dev-login', auth.devLogin);
 router.post('/verify-otp', auth.verifyOTP);
 router.post('/resend-otp', auth.resendOTP);
 
