@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { api } from '../lib/api';
+import useDevLogin from '../lib/useDevLogin';
 import OTPModal from '../components/OTPModal';
 
 export default function CustomerLogin() {
@@ -12,6 +13,7 @@ export default function CustomerLogin() {
   const [otpEmail, setOtpEmail] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const navigate = useNavigate();
+  const devLoginEnabled = useDevLogin();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -127,6 +129,8 @@ export default function CustomerLogin() {
             {loggingIn ? 'Logging in...' : 'Sign in'}
           </button>
 
+          {devLoginEnabled && (
+
           <button 
             type="button" 
             onClick={handleQuickLogin}
@@ -135,6 +139,8 @@ export default function CustomerLogin() {
           >
             {loggingIn ? 'Logging in...' : 'Quick Login (Test Customer)'}
           </button>
+
+          )}
           <div className="mt-4 flex flex-col items-center gap-3">
             <div className="relative flex items-center py-2 w-full">
               <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
@@ -165,7 +171,7 @@ export default function CustomerLogin() {
           onClose={() => setShowOTP(false)}
           onVerify={handleVerifyOTP}
           email={otpEmail}
-          role="customer"
+          
           onResend={handleResendOTP}
         />
       </div>

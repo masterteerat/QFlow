@@ -1,7 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { clearSession, getCustomer, getOwner } from '../lib/auth';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { clearSession, getCustomer, getOwner, getTokenRole } from '../lib/auth';
 import { api } from '../lib/api';
+import ThemeToggle from './ThemeToggle';
+
+const CUSTOMER_TABS = [
+  { to: '/businesses', label: 'Shops' },
+  { to: '/tickets', label: 'My tickets' },
+  { to: '/schedule', label: 'Schedule' }
+];
+
+const tabClass = (isActive, extra = '') =>
+  `${extra} px-3 py-1.5 rounded-full text-sm font-bold text-center transition-colors ${
+    isActive
+      ? 'bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300'
+      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+  }`;
 
 export default function Navbar({ userName }) {
   const navigate = useNavigate();
@@ -11,8 +25,12 @@ export default function Navbar({ userName }) {
 
   const customer = getCustomer();
   const owner = getOwner();
-  const user = customer || owner;
-  const role = customer ? 'customer' : 'owner';
+  // FIX: pick the role from the login token, not from whichever user happens to be in localStorage.
+  // Before, logging in as owner while an old customer session was stored showed the customer's menu
+  // and sent profile requests to the wrong endpoint.
+  const tokenRole = getTokenRole();
+  const role = tokenRole || (customer ? 'customer' : 'owner');
+  const user = role === 'customer' ? customer : owner;
 
   useEffect(() => {
     if (showModal && user?.id) {
@@ -29,7 +47,7 @@ export default function Navbar({ userName }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setStatus({ ...status, error: '', success: '' });
+    setStatus((st) => ({ ...st, error: '', success: '' }));
     try {
       const res = await api.put(`/${role}/profile/${user.id}`, {
         fname: form.fname,
@@ -39,29 +57,38 @@ export default function Navbar({ userName }) {
       if (res.success) {
         const data = res.user || res.owner;
         localStorage.setItem(`${role}_user`, JSON.stringify(data));
-        setStatus({ ...status, success: 'Profile updated successfully!' });
+        setStatus((st) => ({ ...st, success: 'Profile updated successfully!' }));
         setTimeout(() => setShowModal(false), 1500);
       } else {
-        setStatus({ ...status, error: res.message || 'Failed to update profile' });
+        setStatus((st) => ({ ...st, error: res.message || 'Failed to update profile' }));
       }
     } catch (err) {
       console.error('Update profile error:', err);
-      setStatus({ ...status, error: 'Server error' });
+      setStatus((st) => ({ ...st, error: 'Server error' }));
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await api.post('/logout').catch(() => {}); // revoke the token on the server first
     clearSession();
     navigate('/');
   };
 
   return (
-    <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex justify-between items-center relative z-40 transition-colors duration-300">
-      <Link to={customer ? "/businesses" : "/owner/dashboard"} className="text-2xl font-bold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 transition-colors">
+    <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-8 py-4 flex flex-wrap justify-between items-center relative z-40 transition-colors duration-300">
+      <Link to={role === 'customer' ? "/businesses" : "/owner/dashboard"} className="text-2xl font-bold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 transition-colors">
         QFlow
       </Link>
 
-      <div className="flex items-center gap-4">
+      {role === 'customer' && (
+        <div className="hidden sm:flex items-center gap-1 mr-auto ml-8">
+          {CUSTOMER_TABS.map((t) => (
+            <NavLink key={t.to} to={t.to} className={({ isActive }) => tabClass(isActive)}>{t.label}</NavLink>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 sm:gap-4">
         {userName && (
           <button
             onClick={() => setShowModal(true)}
@@ -74,10 +101,19 @@ export default function Navbar({ userName }) {
             <span className="text-slate-600 dark:text-slate-300 text-sm font-bold hidden sm:block">{userName}</span>
           </button>
         )}
+        <ThemeToggle />
         <button onClick={handleLogout} className="bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 px-4 py-2 rounded-md text-sm font-semibold transition-colors">
           Log out
         </button>
       </div>
+
+      {role === 'customer' && (
+        <div className="sm:hidden w-full grid grid-cols-3 gap-1 mt-3">
+          {CUSTOMER_TABS.map((t) => (
+            <NavLink key={t.to} to={t.to} className={({ isActive }) => tabClass(isActive)}>{t.label}</NavLink>
+          ))}
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

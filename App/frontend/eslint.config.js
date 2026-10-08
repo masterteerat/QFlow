@@ -17,5 +17,9 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // Fetch-in-effect then setState is the pattern used throughout this app
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

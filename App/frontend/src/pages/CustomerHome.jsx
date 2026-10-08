@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../lib/api';
+import { getCustomer } from '../lib/auth';
+import Navbar from '../components/Navbar';
+import BanNotice from '../components/BanNotice';
+import { useToast } from '../context/ToastContext';
+import { QRCodeSVG } from 'qrcode.react';
+import { fmtDate } from '../lib/date';
 
 function ShopThumbnail({ src, alt }) {
   const [failed, setFailed] = useState(false);
+  const isDefault = !src || /default-business/.test(src);
 
   if (!src || failed) {
     return (
-      <div className="w-full h-48 shrink-0 bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-        <svg className="w-14 h-14 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="w-full h-24 sm:h-28 shrink-0 bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+        <svg className="w-10 h-10 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
       </div>
@@ -14,22 +23,17 @@ function ShopThumbnail({ src, alt }) {
   }
 
   return (
-    <div className="w-full h-48 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+    <div className="w-full h-24 sm:h-28 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
       <img
         src={src}
         alt={alt}
+        loading="lazy"
         onError={() => setFailed(true)}
-        className="block w-full h-full object-contain"
+        className={`block w-full h-full ${isDefault ? 'object-contain' : 'object-cover'}`}
       />
     </div>
   );
 }
-import { Link } from 'react-router-dom';
-import { api } from '../lib/api';
-import { getCustomer } from '../lib/auth';
-import Navbar from '../components/Navbar';
-import { useToast } from '../context/ToastContext';
-import { QRCodeSVG } from 'qrcode.react';
 
 // Normalize a date value to "YYYY-MM-DD"
 const toDateKey = (d) => String(d).slice(0, 10);
@@ -99,7 +103,6 @@ export default function CustomerHome() {
   maxDateObj.setDate(todayDateObj.getDate() + 14);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     Promise.all([fetchBusinesses(), fetchCategories()]);
   }, []);
 
@@ -111,7 +114,7 @@ export default function CustomerHome() {
 
   const filteredBusinesses = businesses.filter((b) => {
     const matchesSearch = b.business_name.toLowerCase().includes(searchQuery.toLowerCase());
-    const isWalkin = b.time_slots.length === 0;
+    const isWalkin = b.queue_type === 'walkin';
     const matchesQueueType = queueTypeFilter === 'all' || (queueTypeFilter === 'walkin' && isWalkin) || (queueTypeFilter === 'timeslot' && !isWalkin);
     const matchesDeposit = depositFilter === 'all' || (depositFilter === 'with-deposit' && b.is_deposit) || (depositFilter === 'no-deposit' && !b.is_deposit);
     const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(b.category_id);
@@ -145,7 +148,7 @@ export default function CustomerHome() {
   };
 
   const handleStartBooking = (business) => {
-    const isWalkin = business.time_slots.length === 0;
+    const isWalkin = business.queue_type === 'walkin';
     const slotId = selectedSlots[business.business_id] || null;
     const pax = paxByBusiness[business.business_id] || 1;
 
@@ -177,10 +180,8 @@ export default function CustomerHome() {
 
     try {
       const result = await api.post('/customer/tickets', {
-        customer_id: customer.id,
         business_id: businessId,
         timeslot_id: timeslotId,
-        amount_paid: amountPaid,
         pax
       });
 
@@ -256,7 +257,7 @@ export default function CustomerHome() {
               <>
                 <p>
                   <span className="font-semibold text-slate-800 dark:text-white">Date:</span>{' '}
-                  {ticket.date ? new Date(ticket.date).toLocaleDateString('en-GB') : '-'}
+                  {fmtDate(ticket.date)}
                 </p>
                 <p>
                   <span className="font-semibold text-slate-800 dark:text-white">Time:</span>{' '}
@@ -286,23 +287,11 @@ export default function CustomerHome() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
       <Navbar userName={customer?.fname} />
+      <BanNotice />
       
-      <div className="max-w-3xl mx-auto p-5 relative">
-        <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Shops open for booking</h2>
-          <div className="flex gap-2">
-            <Link to="/schedule" className="px-4 py-2 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 rounded-full text-sm font-bold">
-              My schedule
-            </Link>
-            <Link to="/tickets" className="px-4 py-2 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full text-sm font-bold">
-              My tickets
-            </Link>
-          </div>
-        </div>
-
-        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mt-4 mb-5 relative">
-          <div className="bg-teal-600 dark:bg-teal-500 h-2 rounded-full transition-all duration-500" style={{ width: `${businesses.length > 0 ? (filteredBusinesses.length / businesses.length) * 100 : 0}%` }}></div>
-          <span className="absolute right-0 -top-5 text-xs text-slate-500 dark:text-slate-400 font-semibold">{businesses.length > 0 ? Math.round((filteredBusinesses.length / businesses.length) * 100) : 0}%</span>
+      <div className="max-w-5xl mx-auto p-4 sm:p-5 relative">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Shops open for booking</h2>
         </div>
 
         <div className="flex gap-3 mt-4">
@@ -448,9 +437,9 @@ export default function CustomerHome() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-5 mt-2">
+          <div className="grid gap-4 md:grid-cols-2 items-start mt-2">
             {filteredBusinesses.map((b) => {
-              const isWalkin = b.time_slots.length === 0;
+              const isWalkin = b.queue_type === 'walkin';
 
               
               const availableDates = isWalkin
@@ -479,8 +468,8 @@ export default function CustomerHome() {
                  return (
                   <div key={b.business_id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-800 shadow-sm hover:shadow-md transition-shadow">
                     <ShopThumbnail src={b.image} alt={b.business_name} />
-                    <div className="p-5">
-                      <div className="flex justify-between items-start">
+                    <div className="p-4">
+                      <div className="flex justify-between items-start gap-2">
                         <div>
                           <h3 className="text-lg font-bold text-slate-800 dark:text-white">{b.business_name}</h3>
                           {b.description && (
@@ -512,7 +501,7 @@ export default function CustomerHome() {
                             const minDate = availableDates[0];
                             const maxDate = availableDates[availableDates.length - 1];
                             if (value < minDate || value > maxDate) {
-                              alert(`Please pick a date between ${minDate} and ${maxDate}.`);
+                              toast.error(`Please pick a date between ${minDate} and ${maxDate}.`);
                               return;
                             }
                             handleSelectDate(b.business_id, value);
@@ -618,16 +607,12 @@ export default function CustomerHome() {
               <p className="text-slate-500 dark:text-slate-400 mt-1">{paymentModal.business.business_name}</p>
 
               <div className="my-5 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg transition-colors duration-300">
-                <p className="text-sm text-slate-500 dark:text-slate-400">Amount due</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Amount due (demo payment, no real money is charged)</p>
                 <h2 className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">฿{paymentModal.amount}</h2>
               </div>
 
               <div className="w-44 h-44 mx-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 flex items-center justify-center bg-white">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=PAYMENT-TEST-QFLOW-${paymentModal.amount}`}
-                  alt="Payment QR code"
-                  className="w-full h-full"
-                />
+                <QRCodeSVG value={`QFLOW-DEMO-PAYMENT-${paymentModal.amount}`} size={160} />
               </div>
 
               <div className="flex gap-3 mt-6">

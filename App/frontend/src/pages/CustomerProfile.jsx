@@ -20,15 +20,15 @@ export default function CustomerProfile() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setStatus({ ...status, error: '', success: '' });
+    setStatus((st) => ({ ...st, error: '', success: '' }));
     try {
       const res = await api.put(`/customer/profile/${customer.id}`, form);
       if (res.success) {
         localStorage.setItem('customer_user', JSON.stringify(res.user));
-        setStatus({ ...status, success: 'Profile updated successfully!' });
-      } else setStatus({ ...status, error: res.message });
+        setStatus((st) => ({ ...st, success: 'Profile updated successfully!' }));
+      } else setStatus((st) => ({ ...st, error: res.message }));
     } catch {
-      setStatus({ ...status, error: 'Server error' });
+      setStatus((st) => ({ ...st, error: 'Server error' }));
     }
   };
 

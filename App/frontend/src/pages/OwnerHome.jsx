@@ -66,7 +66,11 @@ export default function OwnerHome() {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [showEditShopModal, setShowEditShopModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  // FIX: the delete modal referenced an undefined `shop`; track which shop is being deleted
+  const [shopToDelete, setShopToDelete] = useState(null);
 
+  const [cancelHistory, setCancelHistory] = useState([]);
   const [analytics, setAnalytics] = useState({
     totals: { total_queues: 0, queues_today: 0, queues_past_month: 0, total_cancelled: 0 },
     chartData: []
@@ -82,7 +86,7 @@ export default function OwnerHome() {
   const fetchMyShops = useCallback(async () => {
     if (!owner?.id) { setLoadingShops(false); return; }
     try {
-      const data = await api.get('/owner/businesses', { ownerId: owner.id });
+      const data = await api.get('/owner/businesses');
       if (data.success) setMyShops(data.data);
     } catch (error) {
       console.error('Fetch shops error:', error);
@@ -111,19 +115,27 @@ export default function OwnerHome() {
     }
   }, []);
 
+  const fetchCancelHistory = useCallback(async (id) => {
+    try {
+      const res = await api.get(`/owner/cancelled/${id}`);
+      if (res.success) setCancelHistory(res.data);
+    } catch (error) {
+      console.error('Cancel history error:', error);
+    }
+  }, []);
+
   useEffect(() => { fetchMyShops(); }, [fetchMyShops]);
 
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!businessId) return;
     setShowEditShopModal(false);
     setLoadingQueue(true);
     fetchQueue(businessId);
     fetchAnalytics(businessId);
-    const interval = setInterval(() => fetchQueue(businessId), 10000);
+    fetchCancelHistory(businessId);
+    const interval = setInterval(() => { fetchQueue(businessId); fetchCancelHistory(businessId); }, 10000);
     return () => clearInterval(interval);
-  }, [businessId, fetchQueue, fetchAnalytics]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [businessId, fetchQueue, fetchAnalytics, fetchCancelHistory]);
 
   const handleAction = async (ticketId, action) => {
     setActionLoadingId(ticketId);
@@ -132,6 +144,7 @@ export default function OwnerHome() {
       if (result.success) {
         toast.success('Action completed');
         fetchQueue(businessId);
+        fetchCancelHistory(businessId);
         fetchMyShops();
       } else {
         toast.error(result.message);
@@ -166,6 +179,31 @@ export default function OwnerHome() {
     }
   };
 
+  const handleDeleteShop = async () => {
+    if (!shopToDelete) return;
+    setActionLoadingId(shopToDelete.business_id);
+    try {
+      const result = await api.delete(`/owner/businesses/${shopToDelete.business_id}`);
+      if (result.success) {
+        toast.success('Shop deleted successfully');
+        setShowDeleteModal(false);
+        setShopToDelete(null);
+        setShowScanner(false);
+        fetchMyShops();
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error('Delete shop error:', error);
+      toast.error('Could not reach the server.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Bangkok "today" as YYYY-MM-DD; bookings for later days are shown but can't be checked in yet
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+  const isFuture = (t) => !!t.date && t.date > todayStr;
   const waitingList = queueList.filter((t) => t.status_id === 1);
   const servingList = queueList.filter((t) => t.status_id === 2);
 
@@ -240,12 +278,23 @@ export default function OwnerHome() {
                         </span>
                       </div>
 
-                      <button
-                        onClick={() => navigate(`/owner/businesses/${shop.business_id}`)}
-                        className="w-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 font-bold py-2 px-4 rounded-lg transition-colors border border-teal-200 dark:border-teal-800"
-                      >
-                        Manage queue
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => navigate(`/owner/businesses/${shop.business_id}`)}
+                          className="flex-1 py-1.5 text-sm font-medium text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-lg transition-colors"
+                        >
+                          Manage queue
+                        </button>
+                        {owner && (
+                          <button
+                            onClick={() => { setShopToDelete(shop); setShowDeleteModal(true); }}
+                            className="flex-1 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:text-rose-300 dark:hover:text-rose-200 border border-rose-200 dark:border-rose-800 rounded-lg transition-colors"
+                            title="Delete this shop"
+                          >
+                            × Delete
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -267,7 +316,7 @@ export default function OwnerHome() {
                 <div className="flex items-center gap-4">
                   <ShopAvatar src={selectedShop.image} alt={selectedShop.business_name} />
                   <div>
-                    <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">{selectedShop.business_name}</h2>
+                    <h2 className="text-xl sm:text-3xl font-bold text-slate-800 dark:text-white mb-1">{selectedShop.business_name}</h2>
                     <p className="text-slate-500 dark:text-slate-400 text-sm">
                       {selectedShop.is_deposit ? `Deposit: ฿${selectedShop.deposit_amount}` : 'No deposit required'}
                     </p>
@@ -296,48 +345,9 @@ export default function OwnerHome() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Queues Today</p>
-                <p className="text-3xl font-bold text-teal-700 dark:text-teal-400 mt-1">{analytics.totals.queues_today}</p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Past Few Weeks (30d)</p>
-                <p className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{analytics.totals.queues_past_month}</p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Queues</p>
-                <p className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{analytics.totals.total_queues}</p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Cancelled</p>
-                <p className="text-3xl font-bold text-rose-600 dark:text-rose-400 mt-1">{analytics.totals.total_cancelled}</p>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-8">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">14-Day Queue Activity</h3>
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analytics.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-100 dark:text-slate-700" vertical={false} />
-                    <XAxis dataKey="date_label" tick={{ fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400 text-xs" axisLine={false} tickLine={false} dy={10} />
-                    <YAxis allowDecimals={false} tick={{ fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400 text-xs" axisLine={false} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.3)', background: '#0f172a', color: '#f1f5f9' }}
-                      labelStyle={{ color: '#f1f5f9' }}
-                      itemStyle={{ color: '#5eead4' }}
-                      cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
-                    />
-                    <Line type="monotone" dataKey="count" name="Total Queues" stroke="#14b8a6" strokeWidth={3} dot={{ r: 4, fill: '#14b8a6', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#0f766e', strokeWidth: 0 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
             {loadingQueue && <p className="text-slate-500 dark:text-slate-400 mb-4">Loading queue...</p>}
 
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">Waiting ({waitingList.length})</h3>
               <button
                 onClick={() => setShowScanner(true)}
@@ -348,32 +358,39 @@ export default function OwnerHome() {
               </button>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-x-auto mb-8">
               {waitingList.length === 0 ? (
                 <p className="p-4 text-slate-400 dark:text-slate-500 text-sm">No one is waiting.</p>
               ) : (
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm">
-                      <th className="p-4 font-semibold">Ticket</th>
-                      <th className="p-4 font-semibold">Customer</th>
-                      <th className="p-4 font-semibold">Slot</th>
-                      <th className="p-4 font-semibold text-right">Action</th>
+                      <th className="p-2 sm:p-4 font-semibold">Ticket</th>
+                      <th className="p-2 sm:p-4 font-semibold">Customer</th>
+                      <th className="p-4 font-semibold hidden sm:table-cell">Slot</th>
+                      <th className="p-2 sm:p-4 font-semibold text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {waitingList.map((t) => (
                       <tr key={t.ticket_id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <td className="p-4 font-bold text-teal-700 dark:text-teal-400">{t.queue_number}</td>
-                        <td className="p-4 font-medium text-slate-800 dark:text-white">{t.fname} {t.lname}</td>
-                        <td className="p-4">
-                          <span className={`text-xs font-bold px-2 py-1 rounded ${t.is_walkin ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>
-                            {t.is_walkin ? 'Walk-in' : `${t.start_time.slice(0, 5)}-${t.end_time.slice(0, 5)}`}
+                        <td className="p-2 sm:p-4 font-bold text-teal-700 dark:text-teal-400">{t.queue_number}</td>
+                        <td className="p-2 sm:p-4 font-medium text-slate-800 dark:text-white">
+                          {t.fname} {t.lname}
+                          <span className="sm:hidden block mt-1"><span className={`text-xs font-bold px-2 py-1 rounded whitespace-nowrap inline-block ${t.is_walkin ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>
+                            {t.is_walkin ? 'Walk-in' : `${isFuture(t) ? t.date.slice(5) + ' ' : ''}${t.start_time.slice(0, 5)}-${t.end_time.slice(0, 5)}`}
+                          </span></span>
+                        </td>
+                        <td className="p-4 hidden sm:table-cell">
+                          <span className={`text-xs font-bold px-2 py-1 rounded whitespace-nowrap inline-block ${t.is_walkin ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>
+                            {t.is_walkin ? 'Walk-in' : `${isFuture(t) ? t.date.slice(5) + ' ' : ''}${t.start_time.slice(0, 5)}-${t.end_time.slice(0, 5)}`}
                           </span>
                         </td>
-                        <td className="p-4 text-right flex gap-2 justify-end">
-                          <button onClick={() => handleAction(t.ticket_id, 'no-show')} disabled={actionLoadingId === t.ticket_id} className="bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 px-3 py-1 rounded font-medium text-sm transition-colors">No-show</button>
-                          <button onClick={() => handleAction(t.ticket_id, 'manual-checkin')} disabled={actionLoadingId === t.ticket_id} className="bg-teal-700 text-white hover:bg-teal-800 px-3 py-1 rounded font-medium text-sm transition-colors">{actionLoadingId === t.ticket_id ? '...' : 'Manual Check-in'}</button>
+                        <td className="p-2 sm:p-4 text-right">
+                          <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+                          <button onClick={() => handleAction(t.ticket_id, 'no-show')} disabled={actionLoadingId === t.ticket_id || isFuture(t)} className="bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 px-3 py-2 sm:py-1 rounded font-medium text-sm transition-colors whitespace-nowrap">No-show</button>
+                          <button onClick={() => handleAction(t.ticket_id, 'manual-checkin')} disabled={actionLoadingId === t.ticket_id || isFuture(t)} title={isFuture(t) ? 'Booked for a later day' : undefined} className="bg-teal-700 text-white hover:bg-teal-800 px-3 py-2 sm:py-1 whitespace-nowrap rounded font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed">{actionLoadingId === t.ticket_id ? '...' : (<><span className="sm:hidden">Check-in</span><span className="hidden sm:inline">Manual Check-in</span></>)}</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -409,6 +426,87 @@ export default function OwnerHome() {
                 </table>
               )}
             </div>
+
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white mt-8 mb-4">Cancelled history ({cancelHistory.length})</h3>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-x-auto">
+              {cancelHistory.length === 0 ? (
+                <p className="p-4 text-slate-400 dark:text-slate-500 text-sm">No cancelled tickets yet.</p>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm">
+                      <th className="p-4 font-semibold">Ticket</th>
+                      <th className="p-4 font-semibold">Customer</th>
+                      <th className="p-4 font-semibold">Booked for</th>
+                      <th className="p-4 font-semibold">Reason</th>
+                      <th className="p-4 font-semibold">Cancelled at</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cancelHistory.map((t) => (
+                      <tr key={t.ticket_id} className="border-b border-slate-100 dark:border-slate-700">
+                        <td className="p-4 font-bold text-slate-500 dark:text-slate-400">{t.queue_number}</td>
+                        <td className="p-4 font-medium text-slate-800 dark:text-white">
+                          {t.fname ? `${t.fname} ${t.lname}` : 'Deleted customer'}
+                          {t.pax > 1 && <span className="ml-2 text-xs text-slate-400">x{t.pax}</span>}
+                        </td>
+                        <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
+                          {t.date} {t.is_walkin ? '(Walk-in)' : `${t.start_time.slice(0, 5)}-${t.end_time.slice(0, 5)}`}
+                        </td>
+                        <td className="p-4">
+                          <span className={`text-xs font-bold px-2 py-1 rounded whitespace-nowrap ${t.cancelled_by === 'no_show' ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                            {t.cancelled_by === 'no_show' ? 'No-show' : t.cancelled_by === 'customer' ? 'Cancelled by customer' : t.cancelled_by === 'expired' ? 'Expired (never arrived)' : 'Cancelled'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
+                          {new Date(t.cancelled_at).toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white mt-10 mb-4">Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tickets today</p>
+                <p className="text-3xl font-bold text-teal-700 dark:text-teal-400 mt-1">{analytics.totals.queues_today}</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Last 30 days</p>
+                <p className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{analytics.totals.queues_past_month}</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total tickets</p>
+                <p className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{analytics.totals.total_queues}</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total cancelled</p>
+                <p className="text-3xl font-bold text-rose-600 dark:text-rose-400 mt-1">{analytics.totals.total_cancelled}</p>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-8">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Tickets per day (last 14 days)</h3>
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={analytics.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-100 dark:text-slate-700" vertical={false} />
+                    <XAxis dataKey="date_label" tick={{ fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400 text-xs" axisLine={false} tickLine={false} dy={10} />
+                    <YAxis allowDecimals={false} tick={{ fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400 text-xs" axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.3)', background: '#0f172a', color: '#f1f5f9' }}
+                      labelStyle={{ color: '#f1f5f9' }}
+                      itemStyle={{ color: '#5eead4' }}
+                      cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                    />
+                    <Line type="monotone" dataKey="count" name="Tickets" stroke="#14b8a6" strokeWidth={3} dot={{ r: 4, fill: '#14b8a6', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#0f766e', strokeWidth: 0 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -422,6 +520,30 @@ export default function OwnerHome() {
             fetchMyShops();
           }}
         />
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-md p-8 text-center">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Delete Shop</h3>
+            <p className="text-slate-500 dark:text-slate-400 mb-6">Are you sure you want to delete <strong>{shopToDelete?.business_name}</strong>? This action cannot be undone and will also delete all associated time slots, queues, and tickets.</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => { setShowDeleteModal(false); setShopToDelete(null); }}
+                className="flex-1 py-2 rounded-lg font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteShop}
+                disabled={actionLoadingId === shopToDelete?.business_id}
+                className="flex-1 py-2 rounded-lg font-semibold bg-rose-700 dark:bg-rose-600 text-white hover:bg-rose-800 dark:hover:bg-rose-700 transition-colors disabled:opacity-60"
+              >
+                {actionLoadingId === shopToDelete?.business_id ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <QRScannerModal

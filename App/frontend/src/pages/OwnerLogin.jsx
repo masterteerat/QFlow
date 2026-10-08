@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import useDevLogin from '../lib/useDevLogin';
 import { GoogleLogin } from '@react-oauth/google';
 import OTPModal from '../components/OTPModal';
 
@@ -12,6 +13,7 @@ export default function OwnerLogin() {
   const [otpEmail, setOtpEmail] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const navigate = useNavigate();
+  const devLoginEnabled = useDevLogin();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -108,6 +110,8 @@ export default function OwnerLogin() {
             {loggingIn ? 'Logging in...' : 'Sign in'}
           </button>
 
+          {devLoginEnabled && (
+
           <button 
             type="button" 
             onClick={handleQuickLogin}
@@ -116,6 +120,8 @@ export default function OwnerLogin() {
           >
             {loggingIn ? 'Logging in...' : 'Quick Login (Test Owner)'}
           </button>
+
+          )}
           
           <div className="mt-4 flex flex-col items-center gap-3">
             <div className="relative flex items-center py-2 w-full">
@@ -142,7 +148,7 @@ export default function OwnerLogin() {
           onClose={() => setShowOTP(false)}
           onVerify={handleVerifyOTP}
           email={otpEmail}
-          role="owner"
+          
           onResend={handleResendOTP}
         />
       </div>

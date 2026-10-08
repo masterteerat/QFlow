@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-const OTPModal = ({ isOpen, onClose, onVerify, email, role, onResend }) => {
+const OTPModal = ({ isOpen, onClose, onVerify, email, onResend }) => {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,14 +24,18 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, role, onResend }) => {
 
   const handleChange = (index, value) => {
     if (!/^\d*$/.test(value) || value.length > 1) return;
-    const newOtp = otp.split('');
-    newOtp[index] = value;
-    setOtp(newOtp.join(''));
+    // keep each digit in its own position (empty boxes are spaces) so typing out of order can't shift digits
+    const newOtp = otp.padEnd(6, ' ').split('');
+    newOtp[index] = value || ' ';
+    setOtp(newOtp.join('').trimEnd());
     if (value && index < 5) inputsRef.current[index + 1]?.focus();
   };
 
   const handleKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+    if (e.key === 'Backspace' && !(otp[index] || '').trim() && index > 0) {
+      const prev = otp.padEnd(6, ' ').split('');
+      prev[index - 1] = ' ';
+      setOtp(prev.join('').trimEnd());
       inputsRef.current[index - 1]?.focus();
     }
   };
@@ -39,16 +43,13 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, role, onResend }) => {
   const handlePaste = (e) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    pasted.split('').forEach((char, i) => {
-      if (inputsRef.current[i]) inputsRef.current[i].value = char;
-    });
     setOtp(pasted);
     if (pasted.length === 6) inputsRef.current[5]?.focus();
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (otp.length !== 6) return setError('Please enter the full 6-digit code');
+    if (!/^\d{6}$/.test(otp)) return setError('Please enter the full 6-digit code');
     setError('');
     setLoading(true);
     try {
@@ -95,7 +96,7 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, role, onResend }) => {
                   ref={(el) => inputsRef.current[i] = el}
                   type="text"
                   maxLength={1}
-                  value={otp[i] || ''}
+                  value={(otp[i] || '').trim()}
                   onChange={(e) => handleChange(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
                   className="w-10 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 bg-white dark:bg-slate-700 dark:text-white border-slate-300 dark:border-slate-600"
@@ -107,7 +108,7 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, role, onResend }) => {
 
             <button
               type="submit"
-              disabled={loading || otp.length !== 6}
+              disabled={loading || !/^\d{6}$/.test(otp)}
               className="w-full py-3 bg-teal-700 dark:bg-teal-600 text-white font-bold rounded-lg hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Verifying...' : 'Verify & Login'}
@@ -119,7 +120,7 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, role, onResend }) => {
               disabled={resendCooldown > 0}
               className="w-full py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-400 disabled:opacity-50"
             >
-              {resendCooldown > 0 ? `Resend code in {resendCooldown}s` : 'Didn\'t receive it? Resend code'}
+              {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Didn't receive it? Resend code"}
             </button>
           </form>
         </div>

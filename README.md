@@ -75,3 +75,14 @@ All routes are under `/api`.
 ## License
 
 MIT
+
+
+## Running locally (updated)
+
+1. Database: create a PostgreSQL DB, then run `SQL/init.sql` (schema + required reference data: statuses, roles/permissions, categories, plans, ban tiers). For development only, also run `SQL/data.sql` (sample accounts/shops/tickets - never in production).
+2. Backend: copy `App/backend/.env.example` to `.env` and fill it in. `JWT_SECRET`, `QR_SECRET` and `DATABASE_URL` are required (the server will not start without them).
+   `cd App/backend && npm install && npm start`
+3. Frontend (dev): `cd App/frontend && npm install && npm run dev` (proxies `/api` and `/uploads` to port 3000).
+4. Production build: `npm run build` in `App/frontend` writes to `App/frontend/dist`. Docker copies it to `backend/public`, which Express serves (for a manual run, copy `dist` there yourself).
+
+Notes: `ENABLE_DEV_LOGIN=true` only works when `NODE_ENV` is not `production`. Set `CORS_ORIGIN` only if the frontend is hosted on a different origin.

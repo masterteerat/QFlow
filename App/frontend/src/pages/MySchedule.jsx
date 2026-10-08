@@ -1,12 +1,14 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { bkkToday } from '../lib/date';
 import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
+import ConfirmModal from '../components/ConfirmModal';
+import BanNotice from '../components/BanNotice';
 import { useToast } from '../context/ToastContext';
 
 const HOUR_HEIGHT = 64;
-const DAYS_AHEAD = 14;
+
 
 const STATUS_COLORS = {
   Waiting:   { bg: 'bg-amber-500',   border: 'border-amber-600',   text: 'text-white' },
@@ -16,6 +18,8 @@ const STATUS_COLORS = {
 };
 
 const toDateKey = (d) => {
+  // 'YYYY-MM-DD' strings from the API are already Bangkok dates: don't re-parse them as UTC
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
   const date = new Date(d);
   if (isNaN(date.getTime())) return '';
   const y = date.getFullYear();
@@ -73,16 +77,44 @@ export default function MySchedule() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
+  const [selectedDate, setSelectedDate] = useState(bkkToday());
   const [activeTicket, setActiveTicket] = useState(null);
+  const [emailOptIn, setEmailOptIn] = useState(false);
+  const [dailyHour, setDailyHour] = useState(8);
+  const [queueOptIn, setQueueOptIn] = useState(false);
+  const [reminderHours, setReminderHours] = useState(1);
+  const [optInLoading, setOptInLoading] = useState(false);
+
+  // One helper for all three settings (daily switch, queue-reminder switch, hours).
+  const savePreference = async (changes) => {
+    setOptInLoading(true);
+    try {
+      const result = await api.patch('/customer/notification-preference', changes);
+      if (result.success) {
+        setEmailOptIn(!!result.email_notifications_opt_in);
+        setDailyHour(Number.isInteger(result.daily_email_hour) ? result.daily_email_hour : 8);
+        setQueueOptIn(!!result.queue_reminder_opt_in);
+        setReminderHours(Number(result.reminder_hours_before) || 1);
+        toast.success('Preference saved');
+      } else {
+        toast.error(result.message || 'Failed to update preference');
+      }
+    } catch (error) {
+      console.error('Update preference error:', error);
+      toast.error('Could not reach the server.');
+    } finally {
+      setOptInLoading(false);
+    }
+  };
 
   const customer = getCustomer();
+  const customerId = customer?.id;
   const { toast } = useToast();
 
   const fetchTickets = useCallback(async () => {
-    if (!customer?.id) { setErrorMsg('Please log in again.'); setLoading(false); return; }
+    if (!customerId) { setErrorMsg('Please log in again.'); setLoading(false); return; }
     try {
-      const data = await api.get(`/customer/tickets/${customer.id}`);
+      const data = await api.get(`/customer/tickets/${customerId}`);
       if (data.success) { setTickets(data.data); setErrorMsg(''); }
       else { setErrorMsg(data.message || 'Could not load your schedule.'); }
     } catch (error) {
@@ -91,47 +123,58 @@ export default function MySchedule() {
     } finally {
       setLoading(false);
     }
-  }, [customer?.id]);
+  }, [customerId]);
 
   useEffect(() => {
     fetchTickets();
+    // Fetch email notification preference
+    if (customer?.id) {
+      api.get('/customer/notification-preference').then((res) => {
+        if (res.success) {
+          setEmailOptIn(!!res.email_notifications_opt_in);
+          setDailyHour(Number.isInteger(res.daily_email_hour) ? res.daily_email_hour : 8);
+          setQueueOptIn(!!res.queue_reminder_opt_in);
+          setReminderHours(Number(res.reminder_hours_before) || 1);
+        }
+      });
+    }
     const interval = setInterval(fetchTickets, 30000);
     return () => clearInterval(interval);
-  }, [fetchTickets]);
+  }, [customer?.id, fetchTickets]);
 
-  const handleCancel = async (ticketId) => {
+  // Cancel goes through an in-app confirm popup instead of window.confirm
+  const [cancelId, setCancelId] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancel = (ticketId) => {
     if (!customer?.id) return toast.error('Please log in again.');
-    if (!window.confirm('Cancel this ticket? Your slot will be released right away.')) return;
+    setCancelId(ticketId);
+  };
+
+  const confirmCancel = async () => {
+    setCancelling(true);
     try {
-      const result = await api.patch(`/customer/tickets/${ticketId}/cancel`, { customer_id: customer.id });
+      const result = await api.patch(`/customer/tickets/${cancelId}/cancel`);
       if (result.success) { toast.success('Ticket cancelled'); setActiveTicket(null); fetchTickets(); }
       else { toast.error(result.message); }
     } catch (error) {
       console.error('Cancel ticket error:', error);
       toast.error('Could not reach the server.');
+    } finally {
+      setCancelling(false);
+      setCancelId(null);
     }
   };
 
   const timedTickets = tickets.filter((t) => t.start_time !== '-');
   const walkinTickets = tickets.filter((t) => t.start_time === '-');
 
-  const today = toDateKey(new Date());
+  const today = bkkToday();
 
   const datesWithBookings = useMemo(() => {
     const set = new Set();
     timedTickets.forEach((t) => set.add(toDateKey(t.date)));
     return set;
-  }, [timedTickets]);
-
-  const dateKeys = useMemo(() => {
-    const set = new Set();
-    const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0);
-    for (let i = 0; i < DAYS_AHEAD; i++) {
-      const d = new Date(todayDate); d.setDate(todayDate.getDate() + i);
-      set.add(toDateKey(d));
-    }
-    timedTickets.forEach((t) => set.add(toDateKey(t.date)));
-    return [...set].sort();
   }, [timedTickets]);
 
   const ticketsByDate = useMemo(() => {
@@ -144,10 +187,14 @@ export default function MySchedule() {
     return map;
   }, [timedTickets]);
 
-  const todaysActiveCount = (ticketsByDate[today] || [])
-    .filter((t) => ['Waiting', 'Serving'].includes(t.status_name)).length;
+  // Count timed bookings AND walk-in tickets for today (walk-ins used to be missed, so the banner
+  // said "No queues scheduled" while a walk-in ticket was listed right below it).
+  const isActive = (t) => ['Waiting', 'Serving'].includes(t.status_name);
+  const todaysActiveCount =
+    (ticketsByDate[today] || []).filter(isActive).length +
+    walkinTickets.filter((t) => isActive(t) && (!t.date || toDateKey(t.date) === today)).length;
 
-  const dayTickets = ticketsByDate[selectedDate] || [];
+  const dayTickets = useMemo(() => ticketsByDate[selectedDate] || [], [ticketsByDate, selectedDate]);
 
   const events = useMemo(() => {
     const withMinutes = dayTickets.map((t) => ({
@@ -175,15 +222,104 @@ export default function MySchedule() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
       <Navbar userName={customer?.fname} />
+      <BanNotice />
 
       <div className="max-w-4xl mx-auto p-5">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-slate-800 dark:text-white">My schedule</h2>
-          <div className="flex gap-3 text-sm">
-            <Link to="/tickets" className="text-teal-700 dark:text-teal-400 hover:underline">List view</Link>
-            <Link to="/businesses" className="text-teal-700 dark:text-teal-400 hover:underline">Book more</Link>
-          </div>
         </div>
+
+        {/* Email notification toggle */}
+        {customer?.id && (
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
+            {/* 1) Daily schedule e-mail */}
+            <div className={`p-4 rounded-lg border transition-colors duration-300 ${
+              emailOptIn
+                ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-200 dark:border-teal-600 text-teal-800 dark:text-teal-300'
+                : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300'
+            }`}>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={emailOptIn}
+                  disabled={optInLoading}
+                  onChange={(e) => savePreference({ email_notifications_opt_in: e.target.checked })}
+                  className="mt-1 w-5 h-5 accent-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                />
+                <span>
+                  <span className="block font-medium text-slate-800 dark:text-white">
+                    Daily schedule email ({emailOptIn ? 'ON' : 'OFF'})
+                  </span>
+                  <span className="block text-sm text-slate-500 dark:text-slate-400">
+                    A daily list of your upcoming bookings.
+                  </span>
+                </span>
+              </label>
+              {emailOptIn && (
+                <div className="flex items-center gap-2 mt-3 ml-8 text-sm">
+                  <label htmlFor="daily-hour" className="text-slate-600 dark:text-slate-300">Send it at</label>
+                  <select
+                    id="daily-hour"
+                    value={dailyHour}
+                    disabled={optInLoading}
+                    onChange={(e) => savePreference({ daily_email_hour: Number(e.target.value) })}
+                    className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                  >
+                    {Array.from({ length: 18 }, (_, i) => i + 5).map((h) => (
+                      <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                  <span className="text-slate-600 dark:text-slate-300">(Bangkok time)</span>
+                </div>
+              )}
+            </div>
+
+            {/* 2) Reminder before the queue, with customer-chosen hours */}
+            <div className={`p-4 rounded-lg border transition-colors duration-300 ${
+              queueOptIn
+                ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-200 dark:border-teal-600 text-teal-800 dark:text-teal-300'
+                : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300'
+            }`}>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={queueOptIn}
+                  disabled={optInLoading}
+                  onChange={(e) => savePreference({ queue_reminder_opt_in: e.target.checked })}
+                  className="mt-1 w-5 h-5 accent-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                />
+                <span>
+                  <span className="block font-medium text-slate-800 dark:text-white">
+                    Reminder before my queue ({queueOptIn ? 'ON' : 'OFF'})
+                  </span>
+                  <span className="block text-sm text-slate-500 dark:text-slate-400">
+                    One email shortly before your booked slot starts.
+                  </span>
+                </span>
+              </label>
+              {queueOptIn && (
+                <div className="flex items-center gap-2 mt-3 ml-8 text-sm">
+                  <label htmlFor="reminder-hours" className="text-slate-600 dark:text-slate-300">Remind me</label>
+                  <select
+                    id="reminder-hours"
+                    value={reminderHours}
+                    disabled={optInLoading}
+                    onChange={(e) => savePreference({ reminder_hours_before: Number(e.target.value) })}
+                    className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                  >
+                    {[1, 2, 3, 6, 12, 24].map((h) => (
+                      <option key={h} value={h}>{h} hour{h === 1 ? '' : 's'}</option>
+                    ))}
+                  </select>
+                  <span className="text-slate-600 dark:text-slate-300">before</span>
+                </div>
+              )}
+            </div>
+            {optInLoading && (
+              <span className="text-xs text-slate-400 dark:text-slate-500 sm:col-span-2">Updating...</span>
+            )}
+          </div>
+        )}
 
         {errorMsg && (
           <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded-lg border border-rose-200 dark:border-rose-800 mb-4">
@@ -347,6 +483,15 @@ export default function MySchedule() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={cancelId !== null}
+        title="Cancel this ticket?"
+        message="Your slot will be released right away."
+        confirmLabel="Yes, cancel ticket"
+        loading={cancelling}
+        onConfirm={confirmCancel}
+        onCancel={() => setCancelId(null)}
+      />
     </div>
   );
 }

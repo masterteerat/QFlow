@@ -13,6 +13,11 @@ export default defineConfig({
     basicSsl()
   ],
   server: {
-    host: true
+    host: true,
+    // API + uploaded images live on the Express server (same-origin in production)
+    proxy: {
+      '/api': 'http://localhost:3000',
+      '/uploads': 'http://localhost:3000'
+    }
   }
 })

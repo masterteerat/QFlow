@@ -18,3 +18,5 @@ Thumbs.db
 # Optional: Ignore the public folder if you are automatically copying 
 # your built React files here during local development
 public/
+public/
+uploads/business/

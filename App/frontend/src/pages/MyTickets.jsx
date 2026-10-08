@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
+import ConfirmModal from '../components/ConfirmModal';
+import BanNotice from '../components/BanNotice';
 import { QRCodeSVG } from 'qrcode.react';
+import { fmtDate } from '../lib/date';
 import { useToast } from '../context/ToastContext';
 
 const ACTIVE_STATUSES = ['Waiting', 'Serving'];
@@ -46,12 +48,19 @@ export default function MyTickets() {
     }
   }, [customer?.id]);
 
-  const handleCancel = async (ticketId) => {
-    if (!customer?.id) return toast.error('Please log in again.');
-    if (!window.confirm('Cancel this ticket? Your slot will be released right away.')) return;
+  // Cancel goes through an in-app confirm popup instead of window.confirm
+  const [cancelId, setCancelId] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
+  const handleCancel = (ticketId) => {
+    if (!customer?.id) return toast.error('Please log in again.');
+    setCancelId(ticketId);
+  };
+
+  const confirmCancel = async () => {
+    setCancelling(true);
     try {
-      const result = await api.patch(`/customer/tickets/${ticketId}/cancel`, { customer_id: customer.id });
+      const result = await api.patch(`/customer/tickets/${cancelId}/cancel`);
       if (result.success) {
         toast.success('Ticket cancelled');
         fetchTickets();
@@ -61,6 +70,9 @@ export default function MyTickets() {
     } catch (error) {
       console.error('Cancel ticket error:', error);
       toast.error('Could not reach the server.');
+    } finally {
+      setCancelling(false);
+      setCancelId(null);
     }
   };
 
@@ -75,14 +87,11 @@ export default function MyTickets() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
       <Navbar userName={customer?.fname} />
+      <BanNotice />
       
       <div className="max-w-2xl mx-auto p-5">
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-2xl font-bold text-slate-800 dark:text-white">My tickets</h2>
-          <div className="flex gap-3">
-            <Link to="/schedule" className="text-teal-700 dark:text-teal-400 text-sm hover:underline">Schedule view</Link>
-            <Link to="/businesses" className="text-teal-700 dark:text-teal-400 text-sm hover:underline">← Back home</Link>
-          </div>
         </div>
 
         <div className="flex gap-2 mb-5">
@@ -129,21 +138,27 @@ export default function MyTickets() {
                   
                   {/* */}
                   {t.start_time === '-' ? (
-                    <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                      Booked on: {t.created_at ? new Date(t.created_at).toLocaleString('en-GB', {
-                        day: '2-digit', month: '2-digit', year: 'numeric',
-                        hour: '2-digit', minute: '2-digit'
-                      }) : '-'}
-                    </p>
+                    <>
+                      <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                        Walk-in queue · joined {t.created_at ? new Date(t.created_at).toLocaleString('en-GB', {
+                          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                        }) : '-'}
+                      </p>
+                      {t.status_name === 'Waiting' && t.people_ahead != null && (
+                        <p className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-bold ${Number(t.people_ahead) === 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}`}>
+                          {Number(t.people_ahead) === 0 ? "You're next" : `${t.people_ahead} ahead of you`}
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                      Reserved for: {t.date ? new Date(t.date).toLocaleDateString('en-GB') : '-'}
+                      Reserved for: {fmtDate(t.date)}
                       {' '}at{' '}
                       {`${t.start_time.slice(0, 5)} - ${t.end_time.slice(0, 5)}`}
                     </p>
                   )}
-                  
-                  {Number(t.amount_paid) > 0 && <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold text-teal-600 dark:text-teal-400 mt-1">Deposit paid: ฿{t.amount_paid}</p>}
+
+                  {Number(t.amount_paid) > 0 && <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold text-teal-600 dark:text-teal-400 mt-1">Deposit: ฿{t.amount_paid}{t.payment_status === 'Refunded' ? ' (refunded)' : ''}</p>}
                 </div>
 
                 {/* Show QR Code for Waiting tickets */}
@@ -181,6 +196,15 @@ export default function MyTickets() {
           })}
         </div>
       </div>
+      <ConfirmModal
+        open={cancelId !== null}
+        title="Cancel this ticket?"
+        message="Your slot will be released right away."
+        confirmLabel="Yes, cancel ticket"
+        loading={cancelling}
+        onConfirm={confirmCancel}
+        onCancel={() => setCancelId(null)}
+      />
     </div>
   );
 }

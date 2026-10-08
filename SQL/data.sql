@@ -1,52 +1,22 @@
--- Seed data. Runs after init.sql.
+-- =====================================================================
+-- SAMPLE / TEST DATA - for development and demos ONLY. NEVER load in production.
+-- Must run AFTER init.sql (which already inserts statuses, roles, permissions,
+-- categories, plans and ban tiers). All seeded accounts use password: Password123
+-- All dates use Bangkok time, same as the app.
+--
+-- Ticket numbers follow the app's own format: A001, A002, ... restarting at A001
+-- for each shop's queue each day (see TicketModel.nextQueueNumber).
+-- =====================================================================
 
-INSERT INTO ticket_status (status_name) VALUES
-('Waiting'),
-('Serving'),
-('Completed'),
-('Cancelled');
-
-INSERT INTO payment_status (status_name) VALUES
-('Unpaid'),
-('Paid'),
-('Refunded');
-
-INSERT INTO subscription_plan (plan_name, description, price) VALUES
-('Free Trial', '14-day trial, limited to 50 queues/day', 0.00),
-('Basic Plan', 'Unlimited queues for small businesses', 990.00),
-('Pro Plan', 'Enterprise plan with SMS notifications', 2590.00);
-
-INSERT INTO subscription_status (substatus_name) VALUES
-('Active'),
-('Expired'),
-('Suspended');
-
-INSERT INTO category (name) VALUES
-('Barber Shop'),
-('Dental Clinic'),
-('Cafe & Bar'),
-('Restaurant'),
-('Pharmacy'),
-('Retail'),
-('Salon'),
-('Medical Clinic'),
-('Beauty & Spa'),
-('Fitness'),
--- Additional categories for search/filter testing
-('Tech Repair'),
-('Food & Beverage'),
-('Pet Care'),
-('Fashion & Clothing'),
-('Auto Service');
-
+-- Seed owners
 INSERT INTO owner (fname, lname, phone_number, email, password) VALUES
-('John', 'Doe', '0812345678', 'john@example.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Sarah', 'Smith', '0898765432', 'sarah@example.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Mike', 'Wilson', '0865554321', 'mike@example.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
+('John', 'Doe', '0812345678', 'john@example.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Sarah', 'Smith', '0898765432', 'sarah@example.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Mike', 'Wilson', '0865554321', 'mike@example.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
 -- Additional owners for search/filter testing
-('Admin', 'Owner', '09331112233', 'admin@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Business', 'Owner', '09442223344', 'owner@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Shop', 'Manager', '09553334455', 'manager@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW');
+('Admin', 'Owner', '09331112233', 'admin@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Business', 'Owner', '09442223344', 'owner@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Shop', 'Manager', '09553334455', 'manager@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy');
 
 -- business_id order (matters below): 1 Johns Barber, 2 Sarah Dental, 3 Johns Cafe,
 -- 4 Mikes Walk-in Barber, 5 Tech Repair Shop, 6 Beauty Salon Pro, 7 Food Express,
@@ -66,25 +36,25 @@ INSERT INTO business (business_name, description, image, is_deposit, deposit_amo
 ('Pet Care Clinic', 'Full-service veterinary clinic offering wellness exams, vaccinations, and surgical care for pets.', '/uploads/business/default-business.jpg', TRUE, 30.00, 6, 13);
 
 INSERT INTO subscription (start_date, end_date, business_id, plan_id, substatus_id) VALUES
-(CURRENT_DATE, CURRENT_DATE + 30, 1, 2, 1),
-(CURRENT_DATE, CURRENT_DATE + 180, 2, 3, 1),
-(CURRENT_DATE, CURRENT_DATE + 14, 3, 1, 1),
-(CURRENT_DATE, CURRENT_DATE + 180, 4, 2, 1),
-(CURRENT_DATE, CURRENT_DATE + 180, 5, 2, 1),
-(CURRENT_DATE, CURRENT_DATE + 180, 6, 2, 1);
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 30, 1, 2, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 2, 3, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 14, 3, 1, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 4, 2, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 5, 2, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 6, 2, 1);
 
 -- Today's queue row for each business (the app would auto-create these on first
 -- booking anyway via findOrCreateTodayQueue, but they're pre-seeded here so the
 -- TEST QUEUE TICKETS below have something to attach to).
 INSERT INTO queue (date, business_id) VALUES
-(CURRENT_DATE, 1),
-(CURRENT_DATE, 2),
-(CURRENT_DATE, 3),
-(CURRENT_DATE, 4),
-(CURRENT_DATE, 5),
-(CURRENT_DATE, 6);
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, 2),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, 3),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, 4),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, 5),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, 6);
 
--- Time slots, stamped across a rolling 14-day window (CURRENT_DATE .. CURRENT_DATE + 13),
+-- Time slots, stamped across a rolling 14-day window ((NOW() AT TIME ZONE 'Asia/Bangkok')::date .. (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 13),
 -- exactly like BusinessModel.addTimeSlots does when an owner registers a shop through the
 -- app. This is the actual fix: the old version hardcoded '2026-07-29', which silently
 -- fell outside businessModel.findAllWithSlots' 14-day visibility window once that date
@@ -94,7 +64,7 @@ INSERT INTO queue (date, business_id) VALUES
 
 -- Business 1: Johns Barber Shop (Siam Branch)
 INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
-SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 1
+SELECT (NOW() AT TIME ZONE 'Asia/Bangkok')::date + day_offset, v.start_t, v.end_t, 5, 1
 FROM generate_series(0, 13) AS day_offset
 CROSS JOIN (VALUES
   ('10:00'::time, '11:00'::time),
@@ -104,7 +74,7 @@ CROSS JOIN (VALUES
 
 -- Business 2: Sarah Dental Clinic
 INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
-SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 2
+SELECT (NOW() AT TIME ZONE 'Asia/Bangkok')::date + day_offset, v.start_t, v.end_t, 5, 2
 FROM generate_series(0, 13) AS day_offset
 CROSS JOIN (VALUES
   ('09:00'::time, '10:00'::time),
@@ -113,7 +83,7 @@ CROSS JOIN (VALUES
 
 -- Business 3: Johns Cafe & Bar
 INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
-SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 3
+SELECT (NOW() AT TIME ZONE 'Asia/Bangkok')::date + day_offset, v.start_t, v.end_t, 5, 3
 FROM generate_series(0, 13) AS day_offset
 CROSS JOIN (VALUES
   ('12:00'::time, '13:00'::time),
@@ -124,7 +94,7 @@ CROSS JOIN (VALUES
 -- "Beauty Salon Pro" - business_id 5 is actually Tech Repair Shop; see the
 -- business_id order note above)
 INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
-SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 5
+SELECT (NOW() AT TIME ZONE 'Asia/Bangkok')::date + day_offset, v.start_t, v.end_t, 5, 5
 FROM generate_series(0, 13) AS day_offset
 CROSS JOIN (VALUES
   ('10:00'::time, '11:00'::time),
@@ -134,24 +104,26 @@ CROSS JOIN (VALUES
 -- Business 6: Beauty Salon Pro (old file mislabeled this slot block as
 -- "Pet Care Clinic" - business_id 6 is actually Beauty Salon Pro)
 INSERT INTO time_slot (date, start_time, end_time, max_capacity, business_id)
-SELECT CURRENT_DATE + day_offset, v.start_t, v.end_t, 5, 6
+SELECT (NOW() AT TIME ZONE 'Asia/Bangkok')::date + day_offset, v.start_t, v.end_t, 5, 6
 FROM generate_series(0, 13) AS day_offset
 CROSS JOIN (VALUES
   ('10:00'::time, '11:00'::time),
   ('14:00'::time, '15:00'::time)
 ) AS v(start_t, end_t);
 
+UPDATE business SET queue_type = 'timeslot' WHERE business_id IN (SELECT DISTINCT business_id FROM time_slot);
+
 -- ====================
 -- TEST CUSTOMERS
 -- ====================
--- Password for all: password123
+-- Password for ALL seeded owners and customers: Password123  (the old hash did not match any known password)
 INSERT INTO customer (fname, lname, phone_number, email, password) VALUES
-('John', 'Doe', '09171234567', 'john@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Jane', 'Smith', '09187654321', 'jane@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Mike', 'Johnson', '09198765432', 'mike@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Sarah', 'Williams', '09201112233', 'sarah@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Alex', 'Brown', '09213334455', 'alex@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-('Emily', 'Davis', '09225556677', 'emily@qflow.com', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW');
+('John', 'Doe', '09171234567', 'john@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Jane', 'Smith', '09187654321', 'jane@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Mike', 'Johnson', '09198765432', 'mike@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Sarah', 'Williams', '09201112233', 'sarah@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Alex', 'Brown', '09213334455', 'alex@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy'),
+('Emily', 'Davis', '09225556677', 'emily@qflow.com', '$2b$10$Bp/Zt9jcOi3nfJbiEcwUjezAMByR1wpMc7QHxwjEjQM4kdb2Jtavy');
 
 -- ====================
 -- TEST QUEUE TICKETS
@@ -163,64 +135,21 @@ INSERT INTO customer (fname, lname, phone_number, email, password) VALUES
 -- leftover mismatch from when the slot rows were renumbered. Subqueries make this
 -- self-correcting regardless of row order/count.
 INSERT INTO ticket (queue_number, queue_id, timeslot_id, customer_id, status_id) VALUES
-('Q-001', 1, NULL, 1, 1),
-('Q-002', 1, (SELECT timeslot_id FROM time_slot WHERE business_id = 1 AND date = CURRENT_DATE AND start_time = '10:00:00'), 2, 1),
-('Q-003', 1, NULL, 3, 2),
-('Q-004', 2, (SELECT timeslot_id FROM time_slot WHERE business_id = 2 AND date = CURRENT_DATE AND start_time = '09:00:00'), 4, 1),
-('Q-005', 2, NULL, 5, 1),
-('Q-006', 2, NULL, 6, 1),
-('Q-007', 3, NULL, 1, 1),
-('Q-008', 3, (SELECT timeslot_id FROM time_slot WHERE business_id = 3 AND date = CURRENT_DATE AND start_time = '12:00:00'), 2, 2),
-('Q-009', 5, (SELECT timeslot_id FROM time_slot WHERE business_id = 5 AND date = CURRENT_DATE AND start_time = '10:00:00'), 3, 1),
-('Q-010', 6, (SELECT timeslot_id FROM time_slot WHERE business_id = 6 AND date = CURRENT_DATE AND start_time = '10:00:00'), 4, 1),
-('Q-011', 4, NULL, 5, 1),
-('Q-012', 1, NULL, 6, 1);
+('A001', 1, NULL, 1, 1),
+('A002', 1, (SELECT timeslot_id FROM time_slot WHERE business_id = 1 AND date = (NOW() AT TIME ZONE 'Asia/Bangkok')::date AND start_time = '10:00:00'), 2, 1),
+('A003', 1, NULL, 3, 2),
+('A004', 1, NULL, 6, 1),
+('A001', 2, (SELECT timeslot_id FROM time_slot WHERE business_id = 2 AND date = (NOW() AT TIME ZONE 'Asia/Bangkok')::date AND start_time = '09:00:00'), 4, 1),
+('A002', 2, NULL, 5, 1),
+('A003', 2, NULL, 6, 1),
+('A001', 3, NULL, 1, 1),
+('A002', 3, (SELECT timeslot_id FROM time_slot WHERE business_id = 3 AND date = (NOW() AT TIME ZONE 'Asia/Bangkok')::date AND start_time = '12:00:00'), 2, 2),
+('A001', 4, NULL, 5, 1),
+('A001', 5, (SELECT timeslot_id FROM time_slot WHERE business_id = 5 AND date = (NOW() AT TIME ZONE 'Asia/Bangkok')::date AND start_time = '10:00:00'), 3, 1),
+('A001', 6, (SELECT timeslot_id FROM time_slot WHERE business_id = 6 AND date = (NOW() AT TIME ZONE 'Asia/Bangkok')::date AND start_time = '10:00:00'), 4, 1);
 
--- ====================
--- TEST ACCOUNT CREDENTIALS
--- ====================
--- 
--- OWNERS:
---   admin@qflow.com / password123
---   owner@qflow.com / password123
---   manager@qflow.com / password123
---   john@example.com / password123
---   sarah@example.com / password123
---   mike@example.com / password123
---
--- CUSTOMERS:
---   john@qflow.com / password123
---   jane@qflow.com / password123
---   mike@qflow.com / password123
---   sarah@qflow.com / password123
---   alex@qflow.com / password123
---   emily@qflow.com / password123
---
--- ====================
--- SEARCH & FILTER TEST DATA
--- ====================
--- 
--- Businesses WITH deposit:
---   Johns Barber Shop (Siam Branch) - 100.00
---   Johns Cafe & Bar - 50.00
---   Tech Repair Shop - 50.00
---   Auto Service Center - 75.00
---   Fashion Hub - 25.00
---   Pet Care Clinic - 30.00
---
--- Businesses WITH NO deposit:
---   Sarah Dental Clinic - 0.00
---   Mikes Walk-in Barber - 0.00
---   Beauty Salon Pro - 0.00
---   Food Express - 0.00
---
--- Search keywords to test:
---   "Tech" -> Tech Repair Shop
---   "Beauty" -> Beauty Salon Pro
---   "Food" -> Food Express
---   "Auto" -> Auto Service Center
---   "Fashion" -> Fashion Hub
---   "Pet" -> Pet Care Clinic
---   "repair" -> Tech Repair Shop, Auto Service Center
---   "barber" -> Johns Barber Shop, Mikes Walk-in Barber
---   "dental" -> Sarah Dental Clinic
+
+-- ========== 5) ผู้ใช้เดิมที่ยังไม่มี role ==========
+-- ถ้าไม่ทำ ผู้ใช้เดิมจะได้ 403 ทุก route เพราะไม่มี permission
+UPDATE customer SET role_ID = (SELECT role_ID FROM role WHERE role_name = 'customer') WHERE role_ID IS NULL;
+UPDATE owner    SET role_ID = (SELECT role_ID FROM role WHERE role_name = 'owner')    WHERE role_ID IS NULL;

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { GoogleLogin } from '@react-oauth/google';
 
-const NAME_REGEX = /^[A-Za-z'\- ]+$/;
+const NAME_REGEX = /^[A-Za-zก-๙'\- ]+$/u;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^0\d{8,9}$/; // 0XXXXXXXX(X) - 9 or 10 digits, starts with 0
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
@@ -86,7 +86,7 @@ export default function OwnerSignUp() {
       if (!data.success) return setError(data.message);
       localStorage.setItem('token', data.token);
       localStorage.setItem('owner_user', JSON.stringify(data.owner));
-      navigate('/owner/home');
+      navigate('/owner/dashboard');
     } catch { setError('Google Login Failed.'); }
   };
 
@@ -165,7 +165,7 @@ export default function OwnerSignUp() {
         </form>
 
         <p className="mt-4 text-sm text-center text-slate-600 dark:text-slate-300">
-          Already registered? <Link to="/owner-login" className="text-teal-700 dark:text-teal-400 hover:underline">Sign in</Link>
+          Already registered? <Link to="/owner/login" className="text-teal-700 dark:text-teal-400 hover:underline">Sign in</Link>
         </p>
       </div>
     </div>

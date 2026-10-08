@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 
 const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
@@ -8,6 +8,71 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
   const scannerRef = useRef(null);
   const scanHandledRef = useRef(false);
   const startPromiseRef = useRef(null);
+
+
+  /**
+   * Stop and clean up the QR scanner.
+   */
+  const cleanupScanner = async (scanner = scannerRef.current) => {
+    if (!scanner) return;
+
+    try {
+      // Wait for a pending start() so stop()/clear() can't race it (React StrictMode runs cleanup immediately)
+      if (startPromiseRef.current) { try { await startPromiseRef.current; } catch { /* start failed */ } }
+      // If scanner is currently running, stop it first.
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+
+      // Clear the scanner UI.
+      scanner.clear();
+    } catch (err) {
+      console.error("Failed to clean up QR scanner:", err);
+    }
+
+    if (scannerRef.current === scanner) {
+      scannerRef.current = null;
+    }
+  };
+
+  /**
+   * Close modal and stop camera.
+   */
+  const closeScanner = async () => {
+    const scanner = scannerRef.current;
+
+    if (!scanner) {
+      onClose();
+      return;
+    }
+
+    try {
+      /*
+       * If start() is still in progress, wait for it.
+       * This prevents start() and stop()/clear() from racing.
+       */
+      if (startPromiseRef.current) {
+        try {
+          await startPromiseRef.current;
+        } catch {
+          // start() failed, nothing to stop
+        }
+
+        startPromiseRef.current = null;
+      }
+
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+
+      scanner.clear();
+    } catch (err) {
+      console.error("Failed to stop scanner:", err);
+    } finally {
+      scannerRef.current = null;
+      onClose();
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -79,69 +144,8 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
     return () => {
       cleanupScanner(html5QrCode);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
-
-  /**
-   * Stop and clean up the QR scanner.
-   */
-  const cleanupScanner = async (scanner = scannerRef.current) => {
-    if (!scanner) return;
-
-    try {
-      // If scanner is currently running, stop it first.
-      if (scanner.isScanning) {
-        await scanner.stop();
-      }
-
-      // Clear the scanner UI.
-      scanner.clear();
-    } catch (err) {
-      console.error("Failed to clean up QR scanner:", err);
-    }
-
-    if (scannerRef.current === scanner) {
-      scannerRef.current = null;
-    }
-  };
-
-  /**
-   * Close modal and stop camera.
-   */
-  const closeScanner = async () => {
-    const scanner = scannerRef.current;
-
-    if (!scanner) {
-      onClose();
-      return;
-    }
-
-    try {
-      /*
-       * If start() is still in progress, wait for it.
-       * This prevents start() and stop()/clear() from racing.
-       */
-      if (startPromiseRef.current) {
-        try {
-          await startPromiseRef.current;
-        } catch {
-          // start() failed, nothing to stop
-        }
-
-        startPromiseRef.current = null;
-      }
-
-      if (scanner.isScanning) {
-        await scanner.stop();
-      }
-
-      scanner.clear();
-    } catch (err) {
-      console.error("Failed to stop scanner:", err);
-    } finally {
-      scannerRef.current = null;
-      onClose();
-    }
-  };
 
   /**
    * Scan a QR code from an uploaded image.
@@ -154,6 +158,7 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
     setErrorMsg("");
     scanHandledRef.current = false;
 
+    let fileScannerRef = { clear: async () => {} };
     try {
       /*
        * Stop camera first if it is running.
@@ -168,6 +173,7 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
        * interfere with each other.
        */
       const fileScanner = new Html5Qrcode("qr-file-scanner");
+      fileScannerRef = fileScanner;
 
       const decodedText = await fileScanner.scanFile(file, true);
 
@@ -182,6 +188,7 @@ const QRScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
     } catch (err) {
       console.error("File Scan Error:", err);
 
+      try { await fileScannerRef.clear(); } catch { /* ignore */ }
       setErrorMsg(
         "Failed to read QR from image. Please use a clearer QR Code image."
       );
