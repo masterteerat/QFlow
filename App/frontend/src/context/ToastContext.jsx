@@ -38,7 +38,7 @@ export function ToastProvider({ children }) {
               t.type === 'success' ? 'bg-emerald-600 text-white' :
               t.type === 'error' ? 'bg-rose-600 text-white' :
               t.type === 'warning' ? 'bg-amber-600 text-white' :
-              'bg-slate-700 text-white'
+              'bg-ink-700 text-white'
             }`}
             onClick={() => removeToast(t.id)}
             role="alert"

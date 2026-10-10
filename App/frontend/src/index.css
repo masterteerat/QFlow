@@ -1,18 +1,122 @@
 @import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@keyframes slide-in {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+/* ---------------------------------------------------------------
+   QFlow v2 design tokens
+   brand = signal orange (actions, active states)
+   ink   = warm neutrals (paper in light mode, charcoal in dark mode)
+   --------------------------------------------------------------- */
+@theme {
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, "Noto Sans Thai", "Sarabun", sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-brand-50: #fff4ec;
+  --color-brand-100: #ffe6d5;
+  --color-brand-200: #ffcba8;
+  --color-brand-300: #ffa874;
+  --color-brand-400: #ff8644;
+  --color-brand-500: #f46a1f;
+  --color-brand-600: #d9480f;
+  --color-brand-700: #b93a0a;
+  --color-brand-800: #962f0b;
+  --color-brand-900: #7a290d;
+  --color-brand-950: #431204;
+
+  --color-ink-50: #f8f5ef;
+  --color-ink-100: #f0ece4;
+  --color-ink-200: #e3ddd1;
+  --color-ink-300: #cfc7b8;
+  --color-ink-400: #a59d8e;
+  --color-ink-500: #7d7567;
+  --color-ink-600: #5e574b;
+  --color-ink-700: #453f35;
+  --color-ink-800: #2b2721;
+  --color-ink-900: #1b1814;
+  --color-ink-950: #100e0b;
+
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
+
+  --shadow-sm: 0 1px 2px rgb(43 39 33 / 0.06), 0 1px 1px rgb(43 39 33 / 0.04);
+  --shadow-md: 0 6px 16px -4px rgb(43 39 33 / 0.12), 0 2px 4px rgb(43 39 33 / 0.05);
+  --shadow-xl: 0 20px 40px -12px rgb(43 39 33 / 0.28);
 }
 
-.animate-slide-in {
-  animation: slide-in 0.3s ease-out;
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-ink-50);
+    color: var(--color-ink-800);
+    -webkit-font-smoothing: antialiased;
+  }
+  .dark body { background: var(--color-ink-900); color: var(--color-ink-100); }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.015em; }
+  :focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  ::selection { background: var(--color-brand-200); color: var(--color-ink-900); }
+  button:not(:disabled), a { cursor: pointer; }
+  button:active:not(:disabled) { transform: scale(0.98); }
+  button { transition: background-color .15s, color .15s, border-color .15s, transform .1s, box-shadow .15s; }
 }
+
+/* Queue numbers: always monospaced + tabular so A001 / A010 line up */
+.qnum { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; font-weight: 700; }
+
+/* Ticket "stub": notched edges + dashed perforation */
+.stub { position: relative; }
+.stub::before, .stub::after {
+  content: ""; position: absolute; top: var(--stub-y, 62%); width: 22px; height: 22px; border-radius: 9999px;
+  background: var(--color-ink-50); transform: translateY(-50%);
+  box-shadow: inset 0 0 0 1px var(--color-ink-200);
+}
+.stub::before { left: -11px; clip-path: inset(0 0 0 50%); }
+.stub::after { right: -11px; clip-path: inset(0 50% 0 0); }
+.dark .stub::before, .dark .stub::after { background: var(--color-ink-900); box-shadow: inset 0 0 0 1px var(--color-ink-700); }
+.perf { border-top: 2px dashed var(--color-ink-200); }
+.dark .perf { border-color: var(--color-ink-700); }
+
+/* Bottom tab bar spacing on phones (class is toggled by Navbar) */
+@media (max-width: 639px) {
+  body.has-tabbar { padding-bottom: calc(4.75rem + env(safe-area-inset-bottom)); }
+}
+
+@keyframes slide-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.animate-slide-in { animation: slide-in 0.25s ease-out; }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.animate-sheet-up { animation: sheet-up 0.28s cubic-bezier(.2,.8,.2,1); }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade-in { animation: fade-in 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+/* ---------------------------------------------------------------
+   Auth forms: unlayered on purpose, so these win over the per-field
+   utility classes in the login / sign-up pages without editing each one.
+   --------------------------------------------------------------- */
+.auth-card label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-ink-500); margin-bottom: 0.4rem; }
+.dark .auth-card label { color: var(--color-ink-400); }
+.auth-card input:not([type="checkbox"]):not([type="radio"]) {
+  width: 100%; padding: 0.75rem 0.95rem; border-radius: 0.8rem; background: #fff;
+  border: 1.5px solid var(--color-ink-200); color: var(--color-ink-900); font-size: 1rem;
+}
+.dark .auth-card input:not([type="checkbox"]):not([type="radio"]) { background: var(--color-ink-800); border-color: var(--color-ink-700); color: #fff; }
+.auth-card input:focus { outline: none; border-color: var(--color-brand-500); box-shadow: 0 0 0 4px rgb(244 106 31 / 0.15); }
+.auth-card form > button[type="submit"] {
+  background: var(--color-brand-700); color: #fff; border-radius: 0.8rem; padding: 0.85rem 1rem; font-weight: 800; font-size: 1rem; margin-top: 0.5rem;
+}
+.auth-card form > button[type="submit"]:hover:not(:disabled) { background: var(--color-brand-800); }
+.auth-card form > button[type="button"] { border-radius: 0.8rem; padding: 0.7rem 1rem; border: 1.5px dashed var(--color-brand-400); background: transparent; color: var(--color-brand-700); }
+.dark .auth-card form > button[type="button"] { color: var(--color-brand-300); }
+
+.notch { position: absolute; top: 50%; transform: translateY(-50%); width: 1.5rem; height: 1.5rem; border-radius: 9999px; background: var(--color-ink-50); box-shadow: inset 0 0 0 1px var(--color-ink-200); clip-path: inset(0 0 0 0); }
+.notch.-left-3 { clip-path: inset(0 0 0 50%); }
+.notch.-right-3 { clip-path: inset(0 50% 0 0); }
+.dark .notch { background: var(--color-ink-900); box-shadow: inset 0 0 0 1px var(--color-ink-700); }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

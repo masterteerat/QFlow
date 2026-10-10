@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AuthShell from '../components/AuthShell';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import useDevLogin from '../lib/useDevLogin';
@@ -86,26 +87,24 @@ export default function OwnerLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors duration-300">
-      <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-96 transition-colors duration-300">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">QFlow for business</h2>
+    <AuthShell variant="owner" title="Business sign in" subtitle="Manage your shop queue.">
 
         {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded mb-4 text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
 
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Work email</label>
-            <input type="email" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={email} onChange={(e) => setEmail(e.target.value)} disabled={loggingIn} />
+            <label className="block text-ink-700 dark:text-ink-300 text-sm font-bold mb-2">Work email</label>
+            <input type="email" required className="w-full border border-ink-300 dark:border-ink-600 dark:bg-ink-700 dark:text-white p-2 rounded focus:outline-none focus:border-brand-500" value={email} onChange={(e) => setEmail(e.target.value)} disabled={loggingIn} />
           </div>
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Password</label>
-            <input type="password" required className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500" value={password} onChange={(e) => setPassword(e.target.value)} disabled={loggingIn} />
+            <label className="block text-ink-700 dark:text-ink-300 text-sm font-bold mb-2">Password</label>
+            <input type="password" required className="w-full border border-ink-300 dark:border-ink-600 dark:bg-ink-700 dark:text-white p-2 rounded focus:outline-none focus:border-brand-500" value={password} onChange={(e) => setPassword(e.target.value)} disabled={loggingIn} />
           </div>
           
           <button
             type="submit"
             disabled={loggingIn}
-            className="bg-teal-700 hover:bg-teal-800 text-white font-bold py-2 px-4 rounded mt-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-brand-700 hover:bg-brand-800 text-white font-bold py-2 px-4 rounded mt-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loggingIn ? 'Logging in...' : 'Sign in'}
           </button>
@@ -116,7 +115,7 @@ export default function OwnerLogin() {
             type="button" 
             onClick={handleQuickLogin}
             disabled={loggingIn}
-            className="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-ink-200 dark:bg-ink-700 hover:bg-ink-300 dark:hover:bg-ink-600 text-ink-700 dark:text-ink-200 font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loggingIn ? 'Logging in...' : 'Quick Login (Test Owner)'}
           </button>
@@ -125,9 +124,9 @@ export default function OwnerLogin() {
           
           <div className="mt-4 flex flex-col items-center gap-3">
             <div className="relative flex items-center py-2 w-full">
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
-              <span className="flex-shrink-0 mx-4 text-slate-400 dark:text-slate-400 text-sm font-medium">Or</span>
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
+              <div className="flex-grow border-t border-ink-200 dark:border-ink-600"></div>
+              <span className="flex-shrink-0 mx-4 text-ink-400 dark:text-ink-400 text-sm font-medium">Or</span>
+              <div className="flex-grow border-t border-ink-200 dark:border-ink-600"></div>
             </div>
 
             <GoogleLogin 
@@ -139,8 +138,8 @@ export default function OwnerLogin() {
         </form>
 
         <div className="mt-4 text-sm text-center flex flex-col gap-2">
-          <p className="text-slate-600 dark:text-slate-300">New here? <Link to="/owner/signup" className="text-teal-700 dark:text-teal-400 hover:underline">Register your shop</Link></p>
-          <p className="text-slate-500 dark:text-slate-400 text-xs mt-4">Just here to book? <Link to="/login" className="text-teal-700 dark:text-teal-400 hover:underline">Customer login</Link></p>
+          <p className="text-ink-600 dark:text-ink-300">New here? <Link to="/owner/signup" className="text-brand-700 dark:text-brand-400 hover:underline">Register your shop</Link></p>
+          <p className="text-ink-500 dark:text-ink-400 text-xs mt-4">Just here to book? <Link to="/login" className="text-brand-700 dark:text-brand-400 hover:underline">Customer login</Link></p>
         </div>
 
         <OTPModal
@@ -151,7 +150,6 @@ export default function OwnerLogin() {
           
           onResend={handleResendOTP}
         />
-      </div>
-    </div>
+    </AuthShell>
   );
 }

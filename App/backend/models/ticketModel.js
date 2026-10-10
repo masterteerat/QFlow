@@ -178,7 +178,7 @@ const TicketModel = {
   findActiveForBusiness: async (businessId) => {
     const query = `
       SELECT
-        t.ticket_id, t.queue_number, t.status_id, st.status_name,
+        t.ticket_id, t.queue_number, t.status_id, st.status_name, t.pax,
         c.fname, c.lname,
         COALESCE(ts.start_time::text, '-') AS start_time,
         COALESCE(ts.end_time::text, '-') AS end_time,

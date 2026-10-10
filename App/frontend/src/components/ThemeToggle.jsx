@@ -12,8 +12,8 @@ export default function ThemeToggle({ floating = false }) {
 
   const base = 'rounded-full flex items-center justify-center transition-colors';
   const look = floating
-    ? 'fixed bottom-6 right-6 p-3 bg-slate-800 dark:bg-amber-400 text-amber-400 dark:text-slate-900 shadow-xl hover:scale-110 z-50'
-    : 'w-9 h-9 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-amber-300 hover:bg-slate-200 dark:hover:bg-slate-600';
+    ? 'fixed bottom-6 right-6 p-3 bg-ink-800 dark:bg-amber-400 text-amber-400 dark:text-ink-900 shadow-xl hover:scale-110 z-50'
+    : 'w-10 h-10 border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-ink-600 dark:text-amber-300 hover:border-brand-400';
 
   return (
     <button

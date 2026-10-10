@@ -17,6 +17,9 @@ services:
     build:
       context: ..
       dockerfile: Docker/Dockerfile
+      args:
+        # which UI to build: 'frontend' (original) or 'frontend-v2' (redesign)
+        FRONTEND_DIR: ${FRONTEND_DIR:-frontend}
     ports:
       - "3000:3000"
     depends_on:

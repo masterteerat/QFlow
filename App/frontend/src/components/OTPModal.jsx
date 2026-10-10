@@ -74,15 +74,15 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, onResend }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-md">
-        <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white">Verify Your Email</h2>
-          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-2xl leading-none">&times;</button>
+    <div className="fixed inset-0 bg-ink-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+      <div className="bg-white dark:bg-ink-800 rounded-3xl shadow-xl w-full max-w-md">
+        <div className="p-6 border-b border-ink-100 dark:border-ink-700 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-ink-800 dark:text-white">Verify Your Email</h2>
+          <button onClick={onClose} className="text-ink-400 dark:text-ink-500 hover:text-ink-700 dark:hover:text-ink-300 text-2xl leading-none">&times;</button>
         </div>
 
         <div className="p-6">
-          <p className="text-slate-600 dark:text-slate-300 mb-4 text-center">
+          <p className="text-ink-600 dark:text-ink-300 mb-4 text-center">
             We sent a 6-digit code to <strong>{email}</strong>. Enter it below to complete login.
           </p>
 
@@ -99,7 +99,7 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, onResend }) => {
                   value={(otp[i] || '').trim()}
                   onChange={(e) => handleChange(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
-                  className="w-10 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 bg-white dark:bg-slate-700 dark:text-white border-slate-300 dark:border-slate-600"
+                  className="w-11 h-14 text-center qnum text-2xl border-2 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white dark:bg-ink-700 dark:text-white border-ink-300 dark:border-ink-600"
                   autoComplete="one-time-code"
                   inputMode="numeric"
                 />
@@ -109,7 +109,7 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, onResend }) => {
             <button
               type="submit"
               disabled={loading || !/^\d{6}$/.test(otp)}
-              className="w-full py-3 bg-teal-700 dark:bg-teal-600 text-white font-bold rounded-lg hover:bg-teal-800 dark:hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3.5 bg-brand-700 dark:bg-brand-600 text-white font-bold rounded-xl hover:bg-brand-800 dark:hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Verifying...' : 'Verify & Login'}
             </button>
@@ -118,7 +118,7 @@ const OTPModal = ({ isOpen, onClose, onVerify, email, onResend }) => {
               type="button"
               onClick={handleResend}
               disabled={resendCooldown > 0}
-              className="w-full py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-400 disabled:opacity-50"
+              className="w-full py-2 text-sm text-ink-600 dark:text-ink-400 hover:text-brand-700 dark:hover:text-brand-400 disabled:opacity-50"
             >
               {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Didn't receive it? Resend code"}
             </button>

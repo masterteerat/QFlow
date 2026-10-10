@@ -14,6 +14,18 @@ run their day, POS, scheduling staff, etc. - is out of scope on purpose.
 - Staff check tickets in from the owner dashboard when the customer arrives.
 - Shops can optionally require a deposit before a booking is confirmed.
 
+
+## Two UIs (original + redesign)
+
+The project ships with two interchangeable frontends that use the same backend and API:
+
+- `App/frontend` - the original UI (default).
+- `App/frontend-v2` - the redesign: warm "paper & ink" look with an orange accent, mobile tab bar, ticket-stub cards and a booking sheet.
+
+Run the redesign locally: `cd App/frontend-v2 && npm install && npm run dev`.
+Build it into Docker: `FRONTEND_DIR=frontend-v2 docker compose -f Docker/docker-compose.yml up --build`
+(leave `FRONTEND_DIR` unset to keep building the original).
+
 ## Stack
 
 - React (Vite) frontend, Tailwind for styling

@@ -3,19 +3,23 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { clearSession, getCustomer, getOwner, getTokenRole } from '../lib/auth';
 import { api } from '../lib/api';
 import ThemeToggle from './ThemeToggle';
+import Logo from './Logo';
+
+const ICON = {
+  explore: <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />,
+  tickets: <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 010-4h18a2 2 0 010 4v0a2 2 0 000 6v0a2 2 0 010 4H3a2 2 0 010-4v0a2 2 0 000-6zM13 5v14" />,
+  schedule: <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+};
 
 const CUSTOMER_TABS = [
-  { to: '/businesses', label: 'Shops' },
-  { to: '/tickets', label: 'My tickets' },
-  { to: '/schedule', label: 'Schedule' }
+  { to: '/businesses', label: 'Explore', icon: 'explore' },
+  { to: '/tickets', label: 'Tickets', icon: 'tickets' },
+  { to: '/schedule', label: 'Schedule', icon: 'schedule' }
 ];
 
-const tabClass = (isActive, extra = '') =>
-  `${extra} px-3 py-1.5 rounded-full text-sm font-bold text-center transition-colors ${
-    isActive
-      ? 'bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300'
-      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-  }`;
+const Icon = ({ name, className = 'w-5 h-5' }) => (
+  <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">{ICON[name]}</svg>
+);
 
 export default function Navbar({ userName }) {
   const navigate = useNavigate();
@@ -31,6 +35,13 @@ export default function Navbar({ userName }) {
   const tokenRole = getTokenRole();
   const role = tokenRole || (customer ? 'customer' : 'owner');
   const user = role === 'customer' ? customer : owner;
+
+  // Phones get a fixed bottom tab bar for customers; this adds space under the page so nothing hides behind it.
+  useEffect(() => {
+    if (role !== 'customer') return undefined;
+    document.body.classList.add('has-tabbar');
+    return () => document.body.classList.remove('has-tabbar');
+  }, [role]);
 
   useEffect(() => {
     if (showModal && user?.id) {
@@ -74,93 +85,152 @@ export default function Navbar({ userName }) {
     navigate('/');
   };
 
+  const inputCls = 'w-full border border-ink-300 dark:border-ink-600 bg-white dark:bg-ink-700 dark:text-white px-3.5 py-2.5 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
+
   return (
-    <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-8 py-4 flex flex-wrap justify-between items-center relative z-40 transition-colors duration-300">
-      <Link to={role === 'customer' ? "/businesses" : "/owner/dashboard"} className="text-2xl font-bold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 transition-colors">
-        QFlow
-      </Link>
+    <>
+      <header className="sticky top-0 z-40 bg-ink-50/85 dark:bg-ink-900/85 backdrop-blur-md border-b border-ink-200/80 dark:border-ink-700/80">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-2">
+          <Link to={role === 'customer' ? '/businesses' : '/owner/dashboard'} aria-label="QFlow home">
+            <Logo />
+          </Link>
+
+          {role === 'customer' && (
+            <nav className="hidden sm:flex items-center gap-1 ml-6 p-1 rounded-full bg-ink-100 dark:bg-ink-800" aria-label="Main">
+              {CUSTOMER_TABS.map((t) => (
+                <NavLink
+                  key={t.to}
+                  to={t.to}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold transition-colors ${
+                      isActive
+                        ? 'bg-white dark:bg-ink-700 text-brand-700 dark:text-brand-300 shadow-sm'
+                        : 'text-ink-600 dark:text-ink-300 hover:text-ink-900 dark:hover:text-white'
+                    }`
+                  }
+                >
+                  <Icon name={t.icon} className="w-4 h-4" />
+                  {t.label}
+                </NavLink>
+              ))}
+            </nav>
+          )}
+
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
+            {userName && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-2.5 pl-1 pr-1 sm:pr-3.5 py-1 rounded-full border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 hover:border-brand-400"
+                title="Profile"
+                aria-label="Open profile"
+              >
+                <span className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold">
+                  {userName.charAt(0).toUpperCase()}
+                </span>
+                <span className="hidden sm:block text-sm font-bold text-ink-800 dark:text-ink-100">{userName}</span>
+              </button>
+            )}
+            <button
+              onClick={handleLogout}
+              className={`${role === 'customer' ? 'hidden sm:block' : ''} text-sm font-bold text-ink-600 dark:text-ink-300 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2 rounded-full`}
+            >
+              Log out
+            </button>
+          </div>
+        </div>
+      </header>
 
       {role === 'customer' && (
-        <div className="hidden sm:flex items-center gap-1 mr-auto ml-8">
+        <nav
+          className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-ink-800/95 backdrop-blur-md border-t border-ink-200 dark:border-ink-700 grid grid-cols-3 px-2 pt-1.5"
+          style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+          aria-label="Main"
+        >
           {CUSTOMER_TABS.map((t) => (
-            <NavLink key={t.to} to={t.to} className={({ isActive }) => tabClass(isActive)}>{t.label}</NavLink>
+            <NavLink
+              key={t.to}
+              to={t.to}
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-0.5 py-1.5 rounded-xl text-[11px] font-bold ${
+                  isActive ? 'text-brand-700 dark:text-brand-300' : 'text-ink-500 dark:text-ink-400'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span className={`px-5 py-1 rounded-full transition-colors ${isActive ? 'bg-brand-100 dark:bg-brand-900/60' : ''}`}>
+                    <Icon name={t.icon} />
+                  </span>
+                  {t.label}
+                </>
+              )}
+            </NavLink>
           ))}
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 sm:gap-4">
-        {userName && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 p-1.5 pr-3 rounded-full transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600"
-            title="Edit Profile"
-          >
-            <div className="w-9 h-9 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-teal-700 dark:text-teal-300 font-bold text-lg">
-              {userName.charAt(0).toUpperCase()}
-            </div>
-            <span className="text-slate-600 dark:text-slate-300 text-sm font-bold hidden sm:block">{userName}</span>
-          </button>
-        )}
-        <ThemeToggle />
-        <button onClick={handleLogout} className="bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 px-4 py-2 rounded-md text-sm font-semibold transition-colors">
-          Log out
-        </button>
-      </div>
-
-      {role === 'customer' && (
-        <div className="sm:hidden w-full grid grid-cols-3 gap-1 mt-3">
-          {CUSTOMER_TABS.map((t) => (
-            <NavLink key={t.to} to={t.to} className={({ isActive }) => tabClass(isActive)}>{t.label}</NavLink>
-          ))}
-        </div>
+        </nav>
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
-              <h2 className="text-lg font-bold text-slate-800 dark:text-white">Edit Profile</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-2xl leading-none">&times;</button>
+        <div className="fixed inset-0 bg-ink-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 animate-fade-in" onClick={() => setShowModal(false)}>
+          <div
+            className="bg-white dark:bg-ink-800 rounded-t-3xl sm:rounded-2xl shadow-xl w-full sm:max-w-md overflow-hidden animate-sheet-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 pt-5 pb-3 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <span className="w-11 h-11 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">
+                  {(userName || '?').charAt(0).toUpperCase()}
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold text-ink-900 dark:text-white leading-tight">Your profile</h2>
+                  <p className="text-xs text-ink-500 dark:text-ink-400 capitalize">{role} account</p>
+                </div>
+              </div>
+              <button onClick={() => setShowModal(false)} aria-label="Close" className="w-9 h-9 rounded-full bg-ink-100 dark:bg-ink-700 text-ink-600 dark:text-ink-200 text-xl leading-none">&times;</button>
             </div>
 
-            <div className="p-6">
+            <div className="px-6 pb-6 pt-2">
               {status.loading ? (
-                <div className="text-center text-slate-500 dark:text-slate-400 py-8">Loading profile...</div>
+                <div className="text-center text-ink-500 dark:text-ink-400 py-8">Loading profile...</div>
               ) : (
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                  {status.error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded text-sm font-medium">{status.error}</div>}
-                  {status.success && <div className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 p-3 rounded text-sm font-medium">{status.success}</div>}
+                  {status.error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded-xl text-sm font-medium">{status.error}</div>}
+                  {status.success && <div className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 p-3 rounded-xl text-sm font-medium">{status.success}</div>}
 
-                  <div className="flex gap-4">
+                  <div className="flex gap-3">
                     <div className="flex-1">
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">First Name</label>
-                      <input type="text" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2.5 rounded-lg focus:outline-none focus:border-teal-500" value={form.fname} onChange={(e) => setForm({...form, fname: e.target.value})} required />
+                      <label className="block text-xs font-bold uppercase tracking-wide text-ink-500 dark:text-ink-400 mb-1.5">First name</label>
+                      <input type="text" className={inputCls} value={form.fname} onChange={(e) => setForm({ ...form, fname: e.target.value })} required />
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Last Name</label>
-                      <input type="text" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2.5 rounded-lg focus:outline-none focus:border-teal-500" value={form.lname} onChange={(e) => setForm({...form, lname: e.target.value})} required />
+                      <label className="block text-xs font-bold uppercase tracking-wide text-ink-500 dark:text-ink-400 mb-1.5">Last name</label>
+                      <input type="text" className={inputCls} value={form.lname} onChange={(e) => setForm({ ...form, lname: e.target.value })} required />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
-                    <input type="tel" className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2.5 rounded-lg focus:outline-none focus:border-teal-500" value={form.phone_number} onChange={(e) => setForm({...form, phone_number: e.target.value})} />
+                    <label className="block text-xs font-bold uppercase tracking-wide text-ink-500 dark:text-ink-400 mb-1.5">Phone number</label>
+                    <input type="tel" className={inputCls} value={form.phone_number} onChange={(e) => setForm({ ...form, phone_number: e.target.value })} />
                   </div>
 
-                  <div className="flex gap-3 mt-4">
-                    <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 font-bold py-2.5 px-4 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                  <div className="flex gap-3 mt-2">
+                    <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-ink-100 dark:bg-ink-700 text-ink-700 dark:text-ink-200 font-bold py-3 rounded-xl hover:bg-ink-200 dark:hover:bg-ink-600">
                       Cancel
                     </button>
-                    <button type="submit" className="flex-1 bg-teal-700 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-teal-800 transition-colors shadow-sm">
-                      Save Changes
+                    <button type="submit" className="flex-1 bg-brand-700 text-white font-bold py-3 rounded-xl hover:bg-brand-800 shadow-sm">
+                      Save changes
                     </button>
                   </div>
+
+                  <button type="button" onClick={handleLogout} className="mt-1 py-3 rounded-xl text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40">
+                    Log out
+                  </button>
                 </form>
               )}
             </div>
           </div>
         </div>
       )}
-    </nav>
+    </>
   );
 }

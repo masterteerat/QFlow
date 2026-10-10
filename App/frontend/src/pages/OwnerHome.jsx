@@ -1,3 +1,4 @@
+import { fmtMoney } from '../lib/money';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -13,8 +14,8 @@ function ShopThumbnail({ src, alt }) {
 
   if (!src || failed) {
     return (
-      <div className="w-full aspect-[16/10] shrink-0 bg-gradient-to-br from-teal-100 dark:from-teal-900/30 to-teal-50 dark:to-teal-900/20 flex items-center justify-center">
-        <svg className="w-12 h-12 text-teal-400 dark:text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="w-full aspect-[16/10] shrink-0 bg-gradient-to-br from-brand-100 dark:from-brand-900/30 to-brand-50 dark:to-brand-900/20 flex items-center justify-center">
+        <svg className="w-12 h-12 text-brand-400 dark:text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       </div>
@@ -22,7 +23,7 @@ function ShopThumbnail({ src, alt }) {
   }
 
   return (
-    <div className="w-full aspect-[16/10] shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+    <div className="w-full aspect-[16/10] shrink-0 overflow-hidden bg-ink-100 dark:bg-ink-900 flex items-center justify-center">
       <img
         src={src}
         alt={alt}
@@ -38,8 +39,8 @@ function ShopAvatar({ src, alt }) {
 
   if (!src || failed) {
     return (
-      <div className="w-16 h-16 shrink-0 rounded-lg bg-gradient-to-br from-teal-100 dark:from-teal-900/30 to-teal-50 dark:to-teal-900/20 flex items-center justify-center">
-        <svg className="w-7 h-7 text-teal-400 dark:text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="w-16 h-16 shrink-0 rounded-lg bg-gradient-to-br from-brand-100 dark:from-brand-900/30 to-brand-50 dark:to-brand-900/20 flex items-center justify-center">
+        <svg className="w-7 h-7 text-brand-400 dark:text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       </div>
@@ -47,7 +48,7 @@ function ShopAvatar({ src, alt }) {
   }
 
   return (
-    <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+    <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-ink-100 dark:bg-ink-900 flex items-center justify-center">
       <img src={src} alt={alt} onError={() => setFailed(true)} className="block w-full h-full object-contain" />
     </div>
   );
@@ -208,22 +209,25 @@ export default function OwnerHome() {
   const servingList = queueList.filter((t) => t.status_id === 2);
 
   if (loadingShops) {
-    return <div className="text-center p-8 text-slate-500 dark:text-slate-400">Loading your shops...</div>;
+    return <div className="text-center p-8 text-ink-500 dark:text-ink-400">Loading your shops...</div>;
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen">
       <Navbar userName={owner?.fname} />
 
-      <div className="max-w-6xl mx-auto p-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* ---------------- SHOP LIST (nicer UI) ---------------- */}
         {!selectedShop && (
           <div>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-slate-800 dark:text-white">My shops</h2>
+            <div className="flex flex-wrap justify-between items-end gap-3 mb-6">
+              <div>
+                <h1 className="font-display text-3xl sm:text-4xl font-extrabold text-ink-900 dark:text-white tracking-tight">My shops</h1>
+                <p className="text-ink-500 dark:text-ink-400 mt-1">Pick a shop to run its queue.</p>
+              </div>
               <button
                 onClick={() => setShowRegisterModal(true)}
-                className="bg-teal-700 hover:bg-teal-800 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                className="bg-brand-700 hover:bg-brand-800 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -233,15 +237,15 @@ export default function OwnerHome() {
             </div>
 
             {myShops.length === 0 ? (
-              <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                <svg className="mx-auto w-16 h-16 text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="text-center py-16 bg-white dark:bg-ink-800 rounded-xl border border-ink-200 dark:border-ink-700">
+                <svg className="mx-auto w-16 h-16 text-ink-300 dark:text-ink-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
-                <p className="text-slate-500 dark:text-slate-400 text-lg font-semibold">No shops yet</p>
-                <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Register your first shop to get started</p>
+                <p className="text-ink-500 dark:text-ink-400 text-lg font-semibold">No shops yet</p>
+                <p className="text-ink-400 dark:text-ink-500 text-sm mt-1">Register your first shop to get started</p>
                 <button
                   onClick={() => setShowRegisterModal(true)}
-                  className="mt-4 px-6 py-2.5 bg-teal-700 text-white rounded-lg font-semibold hover:bg-teal-800 transition-colors"
+                  className="mt-4 px-6 py-2.5 bg-brand-700 text-white rounded-lg font-semibold hover:bg-brand-800 transition-colors"
                 >
                   Register a shop
                 </button>
@@ -251,47 +255,50 @@ export default function OwnerHome() {
                 {myShops.map((shop) => (
                   <div
                     key={shop.business_id}
-                    className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow flex flex-col"
+                    className="bg-white dark:bg-ink-800 rounded-2xl shadow-sm border border-ink-200 dark:border-ink-700 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition flex flex-col"
                   >
                     <ShopThumbnail src={shop.image} alt={shop.business_name} />
 
                     <div className="p-5 flex flex-col flex-1">
                       <div className="flex justify-between items-start gap-2 mb-1">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white leading-tight">{shop.business_name}</h3>
+                        <h3 className="text-lg font-bold text-ink-800 dark:text-white leading-tight">{shop.business_name}</h3>
                         {shop.category_name && (
-                          <span className="shrink-0 inline-block px-2 py-0.5 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 text-xs font-semibold rounded">
+                          <span className="shrink-0 inline-block px-2 py-0.5 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 text-xs font-semibold rounded">
                             {shop.category_name}
                           </span>
                         )}
                       </div>
 
                       {shop.description && (
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-2">{shop.description}</p>
+                        <p className="text-sm text-ink-500 dark:text-ink-400 mb-4 line-clamp-2">{shop.description}</p>
                       )}
 
-                      <div className="flex gap-4 mb-5 text-sm mt-auto">
-                        <span className="text-amber-600 dark:text-amber-400">
-                          Waiting: <span className="font-bold text-base">{shop.waiting_count}</span>
-                        </span>
-                        <span className="text-emerald-600 dark:text-emerald-400">
-                          Checked in: <span className="font-bold text-base">{shop.serving_count}</span>
-                        </span>
+                      <div className="grid grid-cols-2 gap-2 mb-4 mt-auto">
+                        <div className="rounded-xl bg-brand-50 dark:bg-brand-900/20 px-3 py-2.5">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-brand-800 dark:text-brand-300">Waiting</p>
+                          <p className="qnum text-2xl text-brand-700 dark:text-brand-300">{shop.waiting_count}</p>
+                        </div>
+                        <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2.5">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Checked in</p>
+                          <p className="qnum text-2xl text-emerald-700 dark:text-emerald-300">{shop.serving_count}</p>
+                        </div>
                       </div>
 
                       <div className="flex gap-2">
                         <button
                           onClick={() => navigate(`/owner/businesses/${shop.business_id}`)}
-                          className="flex-1 py-1.5 text-sm font-medium text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-lg transition-colors"
+                          className="flex-1 py-2.5 font-bold text-white bg-ink-900 dark:bg-brand-600 hover:bg-ink-800 dark:hover:bg-brand-500 rounded-xl"
                         >
                           Manage queue
                         </button>
                         {owner && (
                           <button
                             onClick={() => { setShopToDelete(shop); setShowDeleteModal(true); }}
-                            className="flex-1 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:text-rose-300 dark:hover:text-rose-200 border border-rose-200 dark:border-rose-800 rounded-lg transition-colors"
+                            className="px-4 py-2.5 text-sm font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/25 hover:bg-rose-100 dark:hover:bg-rose-900/45 rounded-xl"
                             title="Delete this shop"
+                            aria-label={`Delete ${shop.business_name}`}
                           >
-                            × Delete
+                            Delete
                           </button>
                         )}
                       </div>
@@ -306,29 +313,55 @@ export default function OwnerHome() {
         {/* ---------------- DASHBOARD (graph & schedule edit unchanged) ---------------- */}
         {selectedShop && (
           <div>
-            <button onClick={() => navigate('/owner/dashboard')} className="text-slate-500 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium mb-6 inline-flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-              Back to shops
+            <button onClick={() => navigate('/owner/dashboard')} className="text-ink-500 dark:text-ink-400 hover:text-brand-700 dark:hover:text-brand-300 font-bold text-sm inline-flex items-center gap-1 mb-4">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+              All shops
             </button>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex items-center gap-4">
-                  <ShopAvatar src={selectedShop.image} alt={selectedShop.business_name} />
-                  <div>
-                    <h2 className="text-xl sm:text-3xl font-bold text-slate-800 dark:text-white mb-1">{selectedShop.business_name}</h2>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">
-                      {selectedShop.is_deposit ? `Deposit: ฿${selectedShop.deposit_amount}` : 'No deposit required'}
-                    </p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <ShopAvatar src={selectedShop.image} alt={selectedShop.business_name} />
+                <div className="min-w-0">
+                  <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-ink-900 dark:text-white leading-tight">{selectedShop.business_name}</h1>
+                  <div className="flex flex-wrap gap-2 mt-1.5">
+                    <span className="px-2.5 py-0.5 rounded-full bg-ink-100 dark:bg-ink-700 text-ink-700 dark:text-ink-200 text-xs font-bold">
+                      {selectedShop.queue_type === 'walkin' ? 'Walk-in queue' : 'Time slots'}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-ink-100 dark:bg-ink-700 text-ink-700 dark:text-ink-200 text-xs font-bold">
+                      {selectedShop.is_deposit ? `Deposit ฿${fmtMoney(selectedShop.deposit_amount)}` : 'No deposit'}
+                    </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowEditShopModal(true)}
-                  className="text-sm font-semibold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 border border-teal-200 dark:border-teal-800 px-3 py-1.5 rounded-lg shrink-0"
-                >
-                  Edit shop
-                </button>
               </div>
+              <button
+                onClick={() => setShowEditShopModal(true)}
+                className="text-sm font-bold text-ink-700 dark:text-ink-100 border border-ink-300 dark:border-ink-600 bg-white dark:bg-ink-800 hover:border-brand-400 px-4 py-2 rounded-xl shrink-0"
+              >
+                Edit shop
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr] gap-3 mt-6 mb-8">
+              <div className="bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-2xl p-4 sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400">Waiting</p>
+                <p className="qnum text-4xl sm:text-5xl text-brand-700 dark:text-brand-300 mt-1">{waitingList.length}</p>
+              </div>
+              <div className="bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-2xl p-4 sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400">Checked in</p>
+                <p className="qnum text-4xl sm:text-5xl text-emerald-700 dark:text-emerald-400 mt-1">{servingList.length}</p>
+              </div>
+              <button
+                onClick={() => setShowScanner(true)}
+                className="col-span-2 lg:col-span-1 rounded-2xl bg-ink-900 dark:bg-brand-600 hover:bg-ink-800 dark:hover:bg-brand-500 text-white p-4 sm:p-5 flex items-center justify-center lg:justify-start gap-4 shadow-md"
+              >
+                <span className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2M7 12h10" /></svg>
+                </span>
+                <span className="text-left">
+                  <span className="block font-display text-lg font-extrabold leading-tight">Scan QR to check in</span>
+                  <span className="block text-sm text-white/70">Point the camera at a customer's ticket</span>
+                </span>
+              </button>
             </div>
 
             {showEditShopModal && (
@@ -345,164 +378,138 @@ export default function OwnerHome() {
               </div>
             )}
 
-            {loadingQueue && <p className="text-slate-500 dark:text-slate-400 mb-4">Loading queue...</p>}
+            {loadingQueue && <p className="text-ink-500 dark:text-ink-400 mb-4">Loading queue...</p>}
 
-            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-              <h3 className="text-xl font-bold text-slate-800 dark:text-white">Waiting ({waitingList.length})</h3>
-              <button
-                onClick={() => setShowScanner(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2 text-sm shadow-sm"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                Scan QR to Check-in
-              </button>
-            </div>
+            <h2 className="font-display text-xl font-extrabold text-ink-900 dark:text-white mb-3 flex items-center gap-2">
+              Waiting <span className="qnum text-sm px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900/50 text-brand-800 dark:text-brand-200">{waitingList.length}</span>
+            </h2>
+            {waitingList.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-ink-300 dark:border-ink-600 bg-white/60 dark:bg-ink-800/60 p-6 text-center text-ink-500 dark:text-ink-400 text-sm mb-8">No one is waiting right now.</div>
+            ) : (
+              <ul className="space-y-2.5 mb-8">
+                {waitingList.map((t) => (
+                  <li key={t.ticket_id} className="bg-white dark:bg-ink-800 rounded-2xl border border-ink-200 dark:border-ink-700 p-3.5 sm:p-4 flex items-center gap-3 sm:gap-5">
+                    <div className="qnum text-2xl sm:text-3xl w-[4.5rem] sm:w-24 shrink-0 text-brand-700 dark:text-brand-300">{t.queue_number}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-ink-900 dark:text-white truncate">
+                        {t.fname} {t.lname}
+                        {t.pax > 1 && <span className="ml-2 text-xs font-bold text-ink-500 dark:text-ink-400">× {t.pax} people</span>}
+                      </p>
+                      <span className={`mt-1 inline-block text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${t.is_walkin ? 'bg-ink-100 dark:bg-ink-700 text-ink-600 dark:text-ink-300' : 'bg-brand-100 dark:bg-brand-900/40 text-brand-800 dark:text-brand-200'}`}>
+                        {t.is_walkin ? 'Walk-in' : `${isFuture(t) ? t.date.slice(5) + ' · ' : ''}${t.start_time.slice(0, 5)}–${t.end_time.slice(0, 5)}`}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                      <button
+                        onClick={() => handleAction(t.ticket_id, 'manual-checkin')}
+                        disabled={actionLoadingId === t.ticket_id || isFuture(t)}
+                        title={isFuture(t) ? 'Booked for a later day' : undefined}
+                        className="bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 sm:py-2 rounded-xl font-bold text-sm whitespace-nowrap"
+                      >
+                        {actionLoadingId === t.ticket_id ? '...' : 'Check in'}
+                      </button>
+                      <button
+                        onClick={() => handleAction(t.ticket_id, 'no-show')}
+                        disabled={actionLoadingId === t.ticket_id || isFuture(t)}
+                        className="bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/45 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 sm:py-2 rounded-xl font-bold text-sm whitespace-nowrap"
+                      >
+                        No-show
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-x-auto mb-8">
-              {waitingList.length === 0 ? (
-                <p className="p-4 text-slate-400 dark:text-slate-500 text-sm">No one is waiting.</p>
-              ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm">
-                      <th className="p-2 sm:p-4 font-semibold">Ticket</th>
-                      <th className="p-2 sm:p-4 font-semibold">Customer</th>
-                      <th className="p-4 font-semibold hidden sm:table-cell">Slot</th>
-                      <th className="p-2 sm:p-4 font-semibold text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {waitingList.map((t) => (
-                      <tr key={t.ticket_id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <td className="p-2 sm:p-4 font-bold text-teal-700 dark:text-teal-400">{t.queue_number}</td>
-                        <td className="p-2 sm:p-4 font-medium text-slate-800 dark:text-white">
-                          {t.fname} {t.lname}
-                          <span className="sm:hidden block mt-1"><span className={`text-xs font-bold px-2 py-1 rounded whitespace-nowrap inline-block ${t.is_walkin ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>
-                            {t.is_walkin ? 'Walk-in' : `${isFuture(t) ? t.date.slice(5) + ' ' : ''}${t.start_time.slice(0, 5)}-${t.end_time.slice(0, 5)}`}
-                          </span></span>
-                        </td>
-                        <td className="p-4 hidden sm:table-cell">
-                          <span className={`text-xs font-bold px-2 py-1 rounded whitespace-nowrap inline-block ${t.is_walkin ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}`}>
-                            {t.is_walkin ? 'Walk-in' : `${isFuture(t) ? t.date.slice(5) + ' ' : ''}${t.start_time.slice(0, 5)}-${t.end_time.slice(0, 5)}`}
-                          </span>
-                        </td>
-                        <td className="p-2 sm:p-4 text-right">
-                          <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
-                          <button onClick={() => handleAction(t.ticket_id, 'no-show')} disabled={actionLoadingId === t.ticket_id || isFuture(t)} className="bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 px-3 py-2 sm:py-1 rounded font-medium text-sm transition-colors whitespace-nowrap">No-show</button>
-                          <button onClick={() => handleAction(t.ticket_id, 'manual-checkin')} disabled={actionLoadingId === t.ticket_id || isFuture(t)} title={isFuture(t) ? 'Booked for a later day' : undefined} className="bg-teal-700 text-white hover:bg-teal-800 px-3 py-2 sm:py-1 whitespace-nowrap rounded font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed">{actionLoadingId === t.ticket_id ? '...' : (<><span className="sm:hidden">Check-in</span><span className="hidden sm:inline">Manual Check-in</span></>)}</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <h2 className="font-display text-xl font-extrabold text-ink-900 dark:text-white mb-3 flex items-center gap-2">
+              Checked in <span className="qnum text-sm px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200">{servingList.length}</span>
+            </h2>
+            {servingList.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-ink-300 dark:border-ink-600 bg-white/60 dark:bg-ink-800/60 p-6 text-center text-ink-500 dark:text-ink-400 text-sm">No one has checked in yet.</div>
+            ) : (
+              <ul className="space-y-2.5">
+                {servingList.map((t) => (
+                  <li key={t.ticket_id} className="bg-white dark:bg-ink-800 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 p-3.5 sm:p-4 flex items-center gap-3 sm:gap-5">
+                    <div className="qnum text-2xl sm:text-3xl w-[4.5rem] sm:w-24 shrink-0 text-emerald-700 dark:text-emerald-400">{t.queue_number}</div>
+                    <p className="flex-1 min-w-0 font-bold text-ink-900 dark:text-white truncate">
+                      {t.fname} {t.lname}
+                      {t.pax > 1 && <span className="ml-2 text-xs font-bold text-ink-500 dark:text-ink-400">× {t.pax} people</span>}
+                    </p>
+                    <button
+                      onClick={() => handleAction(t.ticket_id, 'complete')}
+                      disabled={actionLoadingId === t.ticket_id}
+                      className="bg-ink-900 dark:bg-ink-100 text-white dark:text-ink-900 hover:bg-ink-700 dark:hover:bg-white px-4 py-2.5 sm:py-2 rounded-xl font-bold text-sm shrink-0"
+                    >
+                      {actionLoadingId === t.ticket_id ? '...' : 'Complete'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Checked in ({servingList.length})</h3>
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              {servingList.length === 0 ? (
-                <p className="p-4 text-slate-400 dark:text-slate-500 text-sm">No one has checked in yet.</p>
-              ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm">
-                      <th className="p-4 font-semibold">Ticket</th>
-                      <th className="p-4 font-semibold">Customer</th>
-                      <th className="p-4 font-semibold text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {servingList.map((t) => (
-                      <tr key={t.ticket_id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <td className="p-4 font-bold text-teal-700 dark:text-teal-400">{t.queue_number}</td>
-                        <td className="p-4 font-medium text-slate-800 dark:text-white">{t.fname} {t.lname}</td>
-                        <td className="p-4 text-right">
-                          <button onClick={() => handleAction(t.ticket_id, 'complete')} disabled={actionLoadingId === t.ticket_id} className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 px-3 py-1 rounded font-medium text-sm transition-colors">{actionLoadingId === t.ticket_id ? '...' : 'Complete'}</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            <h3 className="text-xl font-bold text-slate-800 dark:text-white mt-8 mb-4">Cancelled history ({cancelHistory.length})</h3>
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-x-auto">
+            <details className="group mt-8 bg-white dark:bg-ink-800 rounded-2xl border border-ink-200 dark:border-ink-700 overflow-hidden">
+              <summary className="cursor-pointer list-none flex items-center justify-between px-5 py-4 font-display text-lg font-extrabold text-ink-900 dark:text-white">
+                <span>Cancelled history <span className="qnum text-sm ml-1 px-2 py-0.5 rounded-full bg-ink-100 dark:bg-ink-700 text-ink-600 dark:text-ink-300">{cancelHistory.length}</span></span>
+                <svg className="w-5 h-5 text-ink-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </summary>
               {cancelHistory.length === 0 ? (
-                <p className="p-4 text-slate-400 dark:text-slate-500 text-sm">No cancelled tickets yet.</p>
+                <p className="px-5 pb-5 text-ink-500 dark:text-ink-400 text-sm">No cancelled tickets yet.</p>
               ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm">
-                      <th className="p-4 font-semibold">Ticket</th>
-                      <th className="p-4 font-semibold">Customer</th>
-                      <th className="p-4 font-semibold">Booked for</th>
-                      <th className="p-4 font-semibold">Reason</th>
-                      <th className="p-4 font-semibold">Cancelled at</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cancelHistory.map((t) => (
-                      <tr key={t.ticket_id} className="border-b border-slate-100 dark:border-slate-700">
-                        <td className="p-4 font-bold text-slate-500 dark:text-slate-400">{t.queue_number}</td>
-                        <td className="p-4 font-medium text-slate-800 dark:text-white">
-                          {t.fname ? `${t.fname} ${t.lname}` : 'Deleted customer'}
-                          {t.pax > 1 && <span className="ml-2 text-xs text-slate-400">x{t.pax}</span>}
-                        </td>
-                        <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
-                          {t.date} {t.is_walkin ? '(Walk-in)' : `${t.start_time.slice(0, 5)}-${t.end_time.slice(0, 5)}`}
-                        </td>
-                        <td className="p-4">
-                          <span className={`text-xs font-bold px-2 py-1 rounded whitespace-nowrap ${t.cancelled_by === 'no_show' ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
-                            {t.cancelled_by === 'no_show' ? 'No-show' : t.cancelled_by === 'customer' ? 'Cancelled by customer' : t.cancelled_by === 'expired' ? 'Expired (never arrived)' : 'Cancelled'}
-                          </span>
-                        </td>
-                        <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
-                          {new Date(t.cancelled_at).toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ul className="divide-y divide-ink-100 dark:divide-ink-700 border-t border-ink-100 dark:border-ink-700">
+                  {cancelHistory.map((t) => (
+                    <li key={t.ticket_id} className="px-5 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <span className="qnum text-lg w-16 text-ink-400">{t.queue_number}</span>
+                      <span className="font-bold text-ink-900 dark:text-white flex-1 min-w-[8rem]">
+                        {t.fname ? `${t.fname} ${t.lname}` : 'Deleted customer'}
+                        {t.pax > 1 && <span className="ml-2 text-xs text-ink-400">× {t.pax}</span>}
+                      </span>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${t.cancelled_by === 'no_show' ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300' : 'bg-ink-100 dark:bg-ink-700 text-ink-600 dark:text-ink-300'}`}>
+                        {t.cancelled_by === 'no_show' ? 'No-show' : t.cancelled_by === 'customer' ? 'Cancelled by customer' : t.cancelled_by === 'expired' ? 'Expired (never arrived)' : 'Cancelled'}
+                      </span>
+                      <span className="text-xs text-ink-500 dark:text-ink-400 w-full sm:w-auto">
+                        {t.date} {t.is_walkin ? '(Walk-in)' : `${t.start_time.slice(0, 5)}–${t.end_time.slice(0, 5)}`} · cancelled {new Date(t.cancelled_at).toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </div>
+            </details>
 
-            <h3 className="text-xl font-bold text-slate-800 dark:text-white mt-10 mb-4">Overview</h3>
+            <h2 className="font-display text-xl font-extrabold text-ink-900 dark:text-white mt-12 mb-4">Overview</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tickets today</p>
-                <p className="text-3xl font-bold text-teal-700 dark:text-teal-400 mt-1">{analytics.totals.queues_today}</p>
+              <div className="bg-white dark:bg-ink-800 p-5 rounded-xl shadow-sm border border-ink-200 dark:border-ink-700">
+                <p className="text-sm font-medium text-ink-500 dark:text-ink-400">Tickets today</p>
+                <p className="text-3xl font-bold text-brand-700 dark:text-brand-400 mt-1">{analytics.totals.queues_today}</p>
               </div>
-              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Last 30 days</p>
-                <p className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{analytics.totals.queues_past_month}</p>
+              <div className="bg-white dark:bg-ink-800 p-5 rounded-xl shadow-sm border border-ink-200 dark:border-ink-700">
+                <p className="text-sm font-medium text-ink-500 dark:text-ink-400">Last 30 days</p>
+                <p className="text-3xl font-bold text-ink-800 dark:text-white mt-1">{analytics.totals.queues_past_month}</p>
               </div>
-              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total tickets</p>
-                <p className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{analytics.totals.total_queues}</p>
+              <div className="bg-white dark:bg-ink-800 p-5 rounded-xl shadow-sm border border-ink-200 dark:border-ink-700">
+                <p className="text-sm font-medium text-ink-500 dark:text-ink-400">Total tickets</p>
+                <p className="text-3xl font-bold text-ink-800 dark:text-white mt-1">{analytics.totals.total_queues}</p>
               </div>
-              <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total cancelled</p>
+              <div className="bg-white dark:bg-ink-800 p-5 rounded-xl shadow-sm border border-ink-200 dark:border-ink-700">
+                <p className="text-sm font-medium text-ink-500 dark:text-ink-400">Total cancelled</p>
                 <p className="text-3xl font-bold text-rose-600 dark:text-rose-400 mt-1">{analytics.totals.total_cancelled}</p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-8">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Tickets per day (last 14 days)</h3>
+            <div className="bg-white dark:bg-ink-800 p-6 rounded-xl shadow-sm border border-ink-200 dark:border-ink-700 mb-8">
+              <h3 className="text-lg font-bold text-ink-800 dark:text-white mb-4">Tickets per day (last 14 days)</h3>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={analytics.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-100 dark:text-slate-700" vertical={false} />
-                    <XAxis dataKey="date_label" tick={{ fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400 text-xs" axisLine={false} tickLine={false} dy={10} />
-                    <YAxis allowDecimals={false} tick={{ fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400 text-xs" axisLine={false} tickLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-ink-100 dark:text-ink-700" vertical={false} />
+                    <XAxis dataKey="date_label" tick={{ fill: 'currentColor' }} className="text-ink-500 dark:text-ink-400 text-xs" axisLine={false} tickLine={false} dy={10} />
+                    <YAxis allowDecimals={false} tick={{ fill: 'currentColor' }} className="text-ink-500 dark:text-ink-400 text-xs" axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.3)', background: '#0f172a', color: '#f1f5f9' }}
                       labelStyle={{ color: '#f1f5f9' }}
-                      itemStyle={{ color: '#5eead4' }}
-                      cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                      itemStyle={{ color: '#ffa874' }}
+                      cursor={{ stroke: '#cfc7b8', strokeWidth: 1, strokeDasharray: '4 4' }}
                     />
-                    <Line type="monotone" dataKey="count" name="Tickets" stroke="#14b8a6" strokeWidth={3} dot={{ r: 4, fill: '#14b8a6', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#0f766e', strokeWidth: 0 }} />
+                    <Line type="monotone" dataKey="count" name="Tickets" stroke="#f46a1f" strokeWidth={3} dot={{ r: 4, fill: '#f46a1f', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#b93a0a', strokeWidth: 0 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -524,13 +531,13 @@ export default function OwnerHome() {
 
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-md p-8 text-center">
-            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Delete Shop</h3>
-            <p className="text-slate-500 dark:text-slate-400 mb-6">Are you sure you want to delete <strong>{shopToDelete?.business_name}</strong>? This action cannot be undone and will also delete all associated time slots, queues, and tickets.</p>
+          <div className="bg-white dark:bg-ink-800 rounded-xl shadow-lg w-full max-w-md p-8 text-center">
+            <h3 className="text-xl font-bold text-ink-800 dark:text-white mb-4">Delete Shop</h3>
+            <p className="text-ink-500 dark:text-ink-400 mb-6">Are you sure you want to delete <strong>{shopToDelete?.business_name}</strong>? This action cannot be undone and will also delete all associated time slots, queues, and tickets.</p>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => { setShowDeleteModal(false); setShopToDelete(null); }}
-                className="flex-1 py-2 rounded-lg font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                className="flex-1 py-2 rounded-lg font-semibold bg-ink-100 dark:bg-ink-700 text-ink-600 dark:text-ink-200 hover:bg-ink-200 dark:hover:bg-ink-600 transition-colors"
               >
                 Cancel
               </button>

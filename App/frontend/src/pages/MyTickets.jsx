@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
@@ -6,15 +7,11 @@ import ConfirmModal from '../components/ConfirmModal';
 import BanNotice from '../components/BanNotice';
 import { QRCodeSVG } from 'qrcode.react';
 import { fmtDate } from '../lib/date';
+import { fmtMoney } from '../lib/money';
 import { useToast } from '../context/ToastContext';
+import { Perf, StatusPill } from '../components/TicketParts';
 
 const ACTIVE_STATUSES = ['Waiting', 'Serving'];
-
-const STATUS_STYLE = {
-  Waiting: { bg: 'bg-amber-100 dark:bg-amber-900/40', color: 'text-amber-800 dark:text-amber-300', label: 'Waiting' },
-  Serving: { bg: 'bg-emerald-100 dark:bg-emerald-900/40', color: 'text-emerald-800 dark:text-emerald-300', label: 'Checked in' },
-  Cancelled: { bg: 'bg-rose-100 dark:bg-rose-900/40', color: 'text-rose-800 dark:text-rose-300', label: 'Cancelled' }
-};
 
 export default function MyTickets() {
   const [tickets, setTickets] = useState([]);
@@ -85,113 +82,103 @@ export default function MyTickets() {
   const visibleTickets = tickets.filter((t) => (filter === 'active' ? ACTIVE_STATUSES.includes(t.status_name) : true));
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+    <div className="min-h-screen">
       <Navbar userName={customer?.fname} />
       <BanNotice />
-      
-      <div className="max-w-2xl mx-auto p-5">
-        <div className="flex justify-between items-center mb-5">
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">My tickets</h2>
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 pb-10">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+          <div>
+            <h1 className="font-display text-3xl sm:text-4xl font-extrabold text-ink-900 dark:text-white tracking-tight">My tickets</h1>
+            <p className="text-ink-500 dark:text-ink-400 mt-1">Updates every 15 seconds.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex p-1 rounded-full bg-ink-100 dark:bg-ink-800">
+              {[['active', 'Active'], ['all', 'All']].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-bold ${filter === key ? 'bg-white dark:bg-ink-700 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-ink-600 dark:text-ink-300'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button onClick={fetchTickets} aria-label="Refresh" className="w-10 h-10 rounded-full border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-ink-600 dark:text-ink-200 hover:border-brand-400 flex items-center justify-center">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-3.2-6.9M21 4v5h-5" /></svg>
+            </button>
+          </div>
         </div>
 
-        <div className="flex gap-2 mb-5">
-          <button
-            onClick={() => setFilter('active')}
-            className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${
-              filter === 'active' ? 'bg-teal-700 dark:bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-            }`}
-          >
-            Active
-          </button>
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${
-              filter === 'all' ? 'bg-teal-700 dark:bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-            }`}
-          >
-            All
-          </button>
-          <button onClick={fetchTickets} className="ml-auto px-4 py-2 rounded-full text-sm border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-            Refresh
-          </button>
-        </div>
-
-        {loading && <p className="text-center text-slate-400 dark:text-slate-500">Loading...</p>}
-
-        {!loading && errorMsg && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded-lg border border-rose-200 dark:border-rose-800">{errorMsg}</div>}
-
-        {!loading && !errorMsg && visibleTickets.length === 0 && (
-          <p className="text-center text-slate-400 dark:text-slate-500 mt-10">
-            {filter === 'active' ? 'No active tickets right now.' : "You haven't booked anything yet."}
-          </p>
+        {loading && (
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {[0, 1].map((i) => <div key={i} className="h-80 rounded-3xl bg-ink-200/70 dark:bg-ink-800 animate-pulse" />)}
+          </div>
         )}
 
-        <div className="flex flex-col gap-4">
-          {visibleTickets.map((t) => {
-            const style = STATUS_STYLE[t.status_name] || { bg: 'bg-slate-100 dark:bg-slate-700', color: 'text-slate-700 dark:text-slate-300', label: t.status_name };
-            return (
-              <div key={t.ticket_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-5 bg-white dark:bg-slate-800 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-5 transition-colors duration-300">
-                
-                {/* Shop info */}
-                <div className="w-full sm:w-auto flex-1 text-center sm:text-left">
-                  <h3 className="font-bold text-slate-800 dark:text-white text-lg">{t.business_name}</h3>
-                  
-                  {/* */}
-                  {t.start_time === '-' ? (
-                    <>
-                      <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                        Walk-in queue · joined {t.created_at ? new Date(t.created_at).toLocaleString('en-GB', {
-                          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-                        }) : '-'}
-                      </p>
-                      {t.status_name === 'Waiting' && t.people_ahead != null && (
-                        <p className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-bold ${Number(t.people_ahead) === 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}`}>
-                          {Number(t.people_ahead) === 0 ? "You're next" : `${t.people_ahead} ahead of you`}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                      Reserved for: {fmtDate(t.date)}
-                      {' '}at{' '}
-                      {`${t.start_time.slice(0, 5)} - ${t.end_time.slice(0, 5)}`}
-                    </p>
-                  )}
+        {!loading && errorMsg && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-4 rounded-2xl border border-rose-200 dark:border-rose-800 font-medium">{errorMsg}</div>}
 
-                  {Number(t.amount_paid) > 0 && <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold text-teal-600 dark:text-teal-400 mt-1">Deposit: ฿{t.amount_paid}{t.payment_status === 'Refunded' ? ' (refunded)' : ''}</p>}
+        {!loading && !errorMsg && visibleTickets.length === 0 && (
+          <div className="text-center bg-white dark:bg-ink-800 rounded-3xl border border-dashed border-ink-300 dark:border-ink-600 p-12">
+            <p className="font-display text-xl font-bold text-ink-900 dark:text-white">{filter === 'active' ? 'No active tickets' : 'Nothing here yet'}</p>
+            <p className="text-ink-500 dark:text-ink-400 text-sm mt-1">{filter === 'active' ? 'Book a slot or join a walk-in queue to get one.' : "You haven't booked anything yet."}</p>
+            <Link to="/businesses" className="inline-block mt-5 px-5 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold">Browse shops</Link>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 items-start">
+          {visibleTickets.map((t) => {
+            const waiting = t.status_name === 'Waiting';
+            const walkin = t.start_time === '-';
+            return (
+              <article key={t.ticket_id} className={`bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-3xl shadow-sm p-6 ${waiting ? '' : 'opacity-90'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-display text-lg font-bold text-ink-900 dark:text-white truncate">{t.business_name}</h3>
+                    <p className="text-sm text-ink-500 dark:text-ink-400 mt-0.5">
+                      {walkin
+                        ? `Walk-in · joined ${t.created_at ? new Date(t.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}`
+                        : `${fmtDate(t.date)} · ${t.start_time.slice(0, 5)}–${t.end_time.slice(0, 5)}`}
+                    </p>
+                  </div>
+                  <StatusPill status={t.status_name} />
                 </div>
 
-                {/* Show QR Code for Waiting tickets */}
-                {t.status_name === 'Waiting' && (
-                  <div className="bg-white p-2 rounded-xl border border-slate-200 shrink-0">
-                    <QRCodeSVG 
-                      value={t.qr_payload || String(t.ticket_id)} 
-                      size={110} 
-                      level="H" 
-                    />
-                  </div>
+                <div className="flex items-end justify-between gap-3 mt-4">
+                  <div className="qnum text-6xl text-ink-900 dark:text-white leading-none">{t.queue_number}</div>
+                  {waiting && walkin && t.people_ahead != null && (
+                    <span className={`px-3 py-1.5 rounded-full text-sm font-bold whitespace-nowrap ${Number(t.people_ahead) === 0 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300' : 'bg-ink-100 dark:bg-ink-700 text-ink-700 dark:text-ink-200'}`}>
+                      {Number(t.people_ahead) === 0 ? "You're next" : `${t.people_ahead} ahead`}
+                    </span>
+                  )}
+                </div>
+
+                {Number(t.amount_paid) > 0 && (
+                  <p className="text-sm font-semibold text-ink-600 dark:text-ink-300 mt-3">
+                    Deposit ฿{fmtMoney(t.amount_paid)}{t.payment_status === 'Refunded' ? ' (refunded)' : ''}
+                  </p>
                 )}
 
-                {/* Queue number and Cancel button */}
-                <div className="w-full sm:w-auto text-center sm:text-right shrink-0 border-t sm:border-t-0 sm:border-l border-slate-200 dark:border-slate-700 pt-4 sm:pt-0 sm:pl-5">
-                  <div className="text-4xl font-bold text-slate-800 dark:text-white">{t.queue_number}</div>
-                  <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold ${style.bg} ${style.color}`}>
-                    {style.label}
-                  </span>
-
-                  {t.status_name === 'Waiting' && (
-                    <div className="mt-4">
-                      <button
-                        onClick={() => handleCancel(t.ticket_id)}
-                        className="px-4 py-2 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 w-full rounded-md text-sm font-bold transition-colors"
-                      >
-                        Cancel Ticket
-                      </button>
+                {waiting && (
+                  <>
+                    <Perf />
+                    <div className="flex items-center gap-5">
+                      <div className="bg-white p-2.5 rounded-2xl border border-ink-200 shrink-0">
+                        <QRCodeSVG value={t.qr_payload || String(t.ticket_id)} size={116} level="H" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-ink-600 dark:text-ink-300 mb-3">Show this code to the staff to check in.</p>
+                        <button
+                          onClick={() => handleCancel(t.ticket_id)}
+                          className="w-full px-4 py-2.5 rounded-xl text-sm font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/25 hover:bg-rose-100 dark:hover:bg-rose-900/45"
+                        >
+                          Cancel ticket
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-
-              </div>
+                  </>
+                )}
+              </article>
             );
           })}
         </div>

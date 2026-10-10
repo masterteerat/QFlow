@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import AuthShell from '../components/AuthShell';
 import { useNavigate, Link } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { api } from '../lib/api';
@@ -90,19 +91,17 @@ export default function CustomerLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center transition-colors duration-300">
-      <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-96 transition-colors duration-300">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">Log in to QFlow</h2>
+    <AuthShell variant="customer" title="Welcome back" subtitle="Log in to see your tickets and book your next visit.">
 
         {error && <div className="bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 p-3 rounded mb-4 text-sm border border-rose-200 dark:border-rose-800">{error}</div>}
 
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Email</label>
+            <label className="block text-ink-700 dark:text-ink-300 text-sm font-bold mb-2">Email</label>
             <input
               type="email"
               required
-              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
+              className="w-full border border-ink-300 dark:border-ink-600 dark:bg-ink-700 dark:text-white p-2 rounded focus:outline-none focus:border-brand-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loggingIn}
@@ -110,11 +109,11 @@ export default function CustomerLogin() {
           </div>
 
           <div>
-            <label className="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">Password</label>
+            <label className="block text-ink-700 dark:text-ink-300 text-sm font-bold mb-2">Password</label>
             <input
               type="password"
               required
-              className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white p-2 rounded focus:outline-none focus:border-teal-500"
+              className="w-full border border-ink-300 dark:border-ink-600 dark:bg-ink-700 dark:text-white p-2 rounded focus:outline-none focus:border-brand-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loggingIn}
@@ -124,7 +123,7 @@ export default function CustomerLogin() {
           <button
             type="submit"
             disabled={loggingIn}
-            className="bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-brand-700 hover:bg-brand-800 dark:bg-brand-600 dark:hover:bg-brand-700 text-white font-bold py-2 px-4 rounded transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loggingIn ? 'Logging in...' : 'Sign in'}
           </button>
@@ -143,9 +142,9 @@ export default function CustomerLogin() {
           )}
           <div className="mt-4 flex flex-col items-center gap-3">
             <div className="relative flex items-center py-2 w-full">
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
-              <span className="flex-shrink-0 mx-4 text-slate-400 dark:text-slate-400 text-sm font-medium">Or</span>
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-600"></div>
+              <div className="flex-grow border-t border-ink-200 dark:border-ink-600"></div>
+              <span className="flex-shrink-0 mx-4 text-ink-400 dark:text-ink-400 text-sm font-medium">Or</span>
+              <div className="flex-grow border-t border-ink-200 dark:border-ink-600"></div>
             </div>
 
             <GoogleLogin 
@@ -158,11 +157,11 @@ export default function CustomerLogin() {
         </form>
 
         <div className="mt-4 text-sm text-center flex flex-col gap-2">
-          <p className="text-slate-700 dark:text-slate-300">
-            No account? <Link to="/signup" className="text-teal-700 dark:text-teal-400 hover:underline">Sign up</Link>
+          <p className="text-ink-700 dark:text-ink-300">
+            No account? <Link to="/signup" className="text-brand-700 dark:text-brand-400 hover:underline">Sign up</Link>
           </p>
-          <p className="text-slate-500 dark:text-slate-400 text-xs mt-4">
-            Shop owner? <Link to="/owner/login" className="text-teal-700 dark:text-teal-400 hover:underline">Owner login</Link>
+          <p className="text-ink-500 dark:text-ink-400 text-xs mt-4">
+            Shop owner? <Link to="/owner/login" className="text-brand-700 dark:text-brand-400 hover:underline">Owner login</Link>
           </p>
         </div>
 
@@ -174,7 +173,6 @@ export default function CustomerLogin() {
           
           onResend={handleResendOTP}
         />
-      </div>
-    </div>
+    </AuthShell>
   );
 }
