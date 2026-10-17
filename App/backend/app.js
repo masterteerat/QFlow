@@ -1,3 +1,4 @@
+process.env.TZ = 'Asia/Bangkok'; // Node local time is always Bangkok, regardless of host/container TZ
 const express = require('express');
 const cors = require('cors');
 const path = require('path');

@@ -1,3 +1,4 @@
+process.env.TZ = 'Asia/Bangkok'; // Node local time is always Bangkok, regardless of host/container TZ
 require('dotenv').config({ quiet: true });
 for (const k of ['JWT_SECRET', 'QR_SECRET', 'DATABASE_URL']) {
   if (!process.env[k]) { console.error(`Missing required env var ${k}`); process.exit(1); }

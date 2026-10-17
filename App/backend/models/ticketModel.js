@@ -216,6 +216,7 @@ const TicketModel = {
     const chartQuery = `
       SELECT
         to_char(series.date, 'Mon DD') AS date_label,
+        to_char(series.date, 'YYYY-MM-DD') AS iso,
         COUNT(t.ticket_id) AS count
       FROM generate_series(${BKK_TODAY}::timestamp - INTERVAL '13 days', ${BKK_TODAY}::timestamp, INTERVAL '1 day') AS series(date)
       LEFT JOIN queue q ON q.date = series.date::date AND q.business_id = $1

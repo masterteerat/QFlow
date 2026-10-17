@@ -9,14 +9,14 @@ import { QRCodeSVG } from 'qrcode.react';
 import { fmtDate } from '../lib/date';
 import { fmtMoney } from '../lib/money';
 import { Perf, StatusPill } from '../components/TicketParts';
+import HScroller from '../components/HScroller';
 
 function ShopThumbnail({ src, alt }) {
   const [failed, setFailed] = useState(false);
-  const isDefault = !src || /default-business/.test(src);
 
   if (!src || failed) {
     return (
-      <div className="w-full h-36 shrink-0 bg-ink-200 dark:bg-ink-700 flex items-center justify-center">
+      <div className="w-full h-48 shrink-0 relative overflow-hidden bg-ink-100 dark:bg-ink-900 flex items-center justify-center">
         <svg className="w-10 h-10 text-ink-400 dark:text-ink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
@@ -25,13 +25,13 @@ function ShopThumbnail({ src, alt }) {
   }
 
   return (
-    <div className="w-full h-36 shrink-0 overflow-hidden bg-ink-100 dark:bg-ink-900 flex items-center justify-center">
+    <div className="w-full h-48 shrink-0 relative overflow-hidden bg-ink-100 dark:bg-ink-900">
       <img
         src={src}
         alt={alt}
         loading="lazy"
         onError={() => setFailed(true)}
-        className={`block w-full h-full ${isDefault ? 'object-contain' : 'object-cover'}`}
+        className="block w-full h-full object-cover object-center"
       />
     </div>
   );
@@ -156,7 +156,7 @@ export default function CustomerHome() {
   const handleStartBooking = (business) => {
     const isWalkin = business.queue_type === 'walkin';
     const slotId = selectedSlots[business.business_id] || null;
-    const pax = paxByBusiness[business.business_id] || 1;
+    const pax = isWalkin ? 1 : (paxByBusiness[business.business_id] || 1);
 
     if (!isWalkin && !slotId) {
       toast.warning('Please pick a time slot first.');
@@ -267,7 +267,7 @@ export default function CustomerHome() {
                 <dd className="font-bold text-ink-900 dark:text-white">
                   {timed
                     ? `${ticket.start_time.slice(0, 5)}–${ticket.end_time.slice(0, 5)}`
-                    : ticket.created_at ? new Date(ticket.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    : ticket.created_at ? new Date(ticket.created_at).toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) : '-'}
                 </dd>
               </div>
             </dl>
@@ -317,6 +317,21 @@ export default function CustomerHome() {
     return { isWalkin, availableDates, selectedDate, slotsForDate, allSlotsBookedForDate, selectedSlotObj, maxPax, currentPax, nextSlot };
   };
 
+  // Ranked recommendation: walk-ins first (open now), then the soonest open slot.
+  const recommendedBusinesses = (() => {
+    const nowKey = `${toDateKey(todayDateObj)} ${new Date().toTimeString().slice(0, 5)}`;
+    return [...businesses]
+      .map((b) => {
+        const v = getShopView(b);
+        if (v.isWalkin) return { b, v, key: nowKey };
+        if (!v.nextSlot) return null;
+        return { b, v, key: `${toDateKey(v.nextSlot.date)} ${v.nextSlot.start_time}` };
+      })
+      .filter(Boolean)
+      .sort((a, c) => a.key.localeCompare(c.key))
+      .slice(0, 6);
+  })();
+
   const sheetShop = sheetId ? businesses.find((b) => b.business_id === sheetId) : null;
   const chipCls = (active) =>
     `shrink-0 px-4 py-2 rounded-full text-sm font-bold border whitespace-nowrap ${
@@ -362,15 +377,54 @@ export default function CustomerHome() {
           </button>
         </div>
 
+        {recommendedBusinesses.length > 0 && (
+          <section className="mt-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+              <h2 className="font-display text-xl font-bold text-ink-900 dark:text-white">Recommended for you</h2>
+              <p className="text-xs text-ink-400 dark:text-ink-500">From shops with an opening right now — no search needed</p>
+            </div>
+            <HScroller wrapperClassName="w-full" className="gap-4 snap-x pb-4" arrowTop="top-24">
+              {recommendedBusinesses.map(({ b, v }) => (
+                <article key={b.business_id} onClick={() => setSheetId(b.business_id)} className="cursor-pointer bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition flex flex-col w-64 shrink-0 snap-start">
+                  <div className="relative">
+                    <ShopThumbnail src={b.image} alt={b.business_name} />
+                    <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-bold shadow-sm ${b.is_deposit ? 'bg-ink-900 text-white' : 'bg-emerald-600 text-white'}`}>
+                      {b.is_deposit ? `฿${fmtMoney(b.deposit_amount)} deposit` : 'Free'}
+                    </span>
+                  </div>
+                  <div className="p-3.5 flex flex-col flex-1">
+                    <h3 className="font-display text-base font-bold leading-snug text-ink-900 dark:text-white line-clamp-2">{b.business_name}</h3>
+                    <div className="mt-auto pt-3">
+                      {v.isWalkin ? (
+                        <p className="inline-flex items-center gap-2 font-bold text-emerald-700 dark:text-emerald-400 text-sm mb-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />Walk-in · join now
+                        </p>
+                      ) : (
+                        <p className="text-xs font-semibold text-ink-900 dark:text-white mb-1.5">Next: {formatDateLabel(toDateKey(v.nextSlot.date)).top} · {v.nextSlot.start_time.slice(0, 5)}</p>
+                      )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSheetId(b.business_id); }}
+                          className="shrink-0 px-4 py-2 rounded-xl font-bold text-white bg-brand-700 hover:bg-brand-800 shadow-sm"
+                        >
+                        {v.isWalkin ? 'Join queue' : 'Book'}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </HScroller>
+          </section>
+        )}
+
         {categories.length > 0 && (
-          <div className="-mx-4 sm:mx-0 px-4 sm:px-0 mt-4 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          <HScroller arrows={false} wrapperClassName="-mx-4 sm:mx-0 mt-4" className="gap-2 px-4 sm:px-0 pb-1">
             <button onClick={() => setCategoryFilter([])} className={chipCls(categoryFilter.length === 0)}>All</button>
             {categories.map((c) => (
               <button key={c.category_id} onClick={() => handleCategoryToggle(c.category_id)} className={chipCls(categoryFilter.includes(c.category_id))}>
                 {c.name}
               </button>
             ))}
-          </div>
+          </HScroller>
         )}
 
         {(searchQuery || activeFilterCount > 0) && (
@@ -494,7 +548,7 @@ export default function CustomerHome() {
               const v = getShopView(b);
               const unavailable = !v.isWalkin && !v.nextSlot;
               return (
-                <article key={b.business_id} className="bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition flex flex-col">
+                <article key={b.business_id} onClick={() => setSheetId(b.business_id)} className="cursor-pointer bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition flex flex-col">
                   <div className="relative">
                     <ShopThumbnail src={b.image} alt={b.business_name} />
                     <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-white/95 text-ink-800 text-xs font-bold shadow-sm">
@@ -527,11 +581,11 @@ export default function CustomerHome() {
                           <span className="font-bold text-ink-500 dark:text-ink-400">Fully booked</span>
                         )}
                       </div>
-                      <button
-                        onClick={() => setSheetId(b.business_id)}
-                        disabled={unavailable}
-                        className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-white ${unavailable ? 'bg-ink-300 dark:bg-ink-600 cursor-not-allowed' : 'bg-brand-700 hover:bg-brand-800 shadow-sm'}`}
-                      >
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSheetId(b.business_id); }}
+                          disabled={unavailable}
+                          className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-white ${unavailable ? 'bg-ink-300 dark:bg-ink-600 cursor-not-allowed' : 'bg-brand-700 hover:bg-brand-800 shadow-sm'}`}
+                        >
                         {v.isWalkin ? 'Join queue' : 'Book'}
                       </button>
                     </div>
@@ -548,9 +602,9 @@ export default function CustomerHome() {
           const hasDeposit = b.is_deposit && Number(b.deposit_amount) > 0;
           const needsSlot = !v.isWalkin && !v.selectedSlotObj;
           return (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-950/60 backdrop-blur-sm animate-fade-in" onClick={() => setSheetId(null)}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/70 backdrop-blur-md p-4 sm:p-8 animate-fade-in" onClick={() => setSheetId(null)}>
               <div
-                className="w-full sm:max-w-lg bg-white dark:bg-ink-800 rounded-t-3xl sm:rounded-3xl shadow-xl max-h-[92vh] flex flex-col animate-sheet-up"
+                className="max-w-xl w-full sm:w-auto bg-white dark:bg-ink-800 rounded-3xl shadow-xl max-h-[85vh] flex flex-col animate-slide-in"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-label={`Book ${b.business_name}`}
@@ -564,6 +618,37 @@ export default function CustomerHome() {
                 </div>
 
                 <div className="px-5 pb-4 overflow-y-auto">
+                  {/* All shop details */}
+                  <div className="pt-3 mb-4">
+                    <div className="overflow-hidden rounded-2xl mb-3">
+                      <ShopThumbnail src={b.image} alt={b.business_name} />
+                    </div>
+
+                    {b.description && (
+                      <p className="text-sm leading-relaxed text-ink-600 dark:text-ink-300 mb-3">{b.description}</p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold">
+                      {v.isWalkin ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+                          </svg>
+                          Walk-in · join now
+                        </span>
+                      ) : v.nextSlot ? (
+                        <span className="text-brand-700 dark:text-brand-300">
+                          Next: {formatDateLabel(toDateKey(v.nextSlot.date)).top} · {v.nextSlot.start_time.slice(0, 5)}–{v.nextSlot.end_time.slice(0, 5)}
+                        </span>
+                      ) : (
+                        <span className="text-ink-400 dark:text-ink-500">No open times today</span>
+                      )}
+                      {hasDeposit && (
+                        <span className="text-ink-500 dark:text-ink-400">Deposit ฿{fmtMoney(b.deposit_amount)}</span>
+                      )}
+                    </div>
+                  </div>
+
                   {v.isWalkin ? (
                     <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 text-sm text-emerald-900 dark:text-emerald-200">
                       <p className="font-bold">Walk-in queue</p>
@@ -572,7 +657,7 @@ export default function CustomerHome() {
                   ) : (
                     <>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Day</h3>
-                      <div className="-mx-5 px-5 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                      <HScroller wheel inlineArrows wrapperClassName="-mx-5 md:mx-0" className="gap-2 px-5 md:px-0 pb-1 snap-x">
                         {v.availableDates.map((dk) => {
                           const lab = formatDateLabel(dk);
                           const on = dk === v.selectedDate;
@@ -580,14 +665,14 @@ export default function CustomerHome() {
                             <button
                               key={dk}
                               onClick={() => handleSelectDate(b.business_id, dk)}
-                              className={`shrink-0 min-w-[4.75rem] px-2 py-2.5 rounded-2xl border text-center ${on ? 'bg-ink-900 dark:bg-brand-600 border-ink-900 dark:border-brand-600 text-white' : 'bg-white dark:bg-ink-700 border-ink-200 dark:border-ink-600 text-ink-800 dark:text-ink-100 hover:border-brand-400'}`}
+                              className={`shrink-0 snap-start min-w-[4.75rem] px-2 py-2.5 rounded-2xl border text-center ${on ? 'bg-ink-900 dark:bg-brand-600 border-ink-900 dark:border-brand-600 text-white' : 'bg-white dark:bg-ink-700 border-ink-200 dark:border-ink-600 text-ink-800 dark:text-ink-100 hover:border-brand-400'}`}
                             >
                               <span className="block text-[10px] leading-4 font-bold uppercase tracking-wide opacity-80">{lab.top}</span>
                               <span className="block text-lg font-extrabold font-display">{dk.slice(8, 10)}</span>
                             </button>
                           );
                         })}
-                      </div>
+                      </HScroller>
 
                       <h3 className="text-xs font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400 mt-5 mb-2">Time</h3>
                       <div className="grid grid-cols-2 gap-2">
@@ -619,31 +704,32 @@ export default function CustomerHome() {
                   <div className="mt-5 flex items-center justify-between rounded-2xl bg-ink-50 dark:bg-ink-900/60 px-4 py-3">
                     <div>
                       <p className="text-sm font-bold text-ink-900 dark:text-white">Party size</p>
-                      <p className="text-xs text-ink-500 dark:text-ink-400">{v.maxPax !== null ? `Up to ${v.maxPax} in this slot` : 'How many people?'}</p>
+                      <p className="text-xs text-ink-500 dark:text-ink-400">{v.isWalkin ? 'Walk-in is always one person.' : v.maxPax !== null ? `Up to ${v.maxPax} in this slot` : 'How many people?'}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
                         aria-label="Fewer people"
+                        disabled={v.isWalkin}
                         onClick={() => setPaxByBusiness((p) => ({ ...p, [b.business_id]: Math.max(1, (p[b.business_id] || 1) - 1) }))}
-                        className="w-10 h-10 rounded-full bg-white dark:bg-ink-700 border border-ink-200 dark:border-ink-600 text-xl font-bold text-ink-700 dark:text-ink-100"
+                        className={`w-10 h-10 rounded-full bg-white dark:bg-ink-700 border border-ink-200 dark:border-ink-600 text-xl font-bold ${v.isWalkin ? 'text-ink-300 dark:text-ink-500' : 'text-ink-700 dark:text-ink-100'} disabled:opacity-40 disabled:cursor-not-allowed`}
                       >−</button>
-                      <span className="w-6 text-center qnum text-xl text-ink-900 dark:text-white">{v.currentPax}</span>
+                      <span className="w-6 text-center qnum text-xl text-ink-900 dark:text-white">{v.isWalkin ? 1 : v.currentPax}</span>
                       <button
                         type="button"
                         aria-label="More people"
-                        disabled={v.maxPax !== null && v.currentPax >= v.maxPax}
+                        disabled={v.isWalkin || (v.maxPax !== null && v.currentPax >= v.maxPax)}
                         onClick={() => setPaxByBusiness((p) => {
                           const next = (p[b.business_id] || 1) + 1;
                           return { ...p, [b.business_id]: v.maxPax !== null ? Math.min(next, v.maxPax) : next };
                         })}
-                        className="w-10 h-10 rounded-full bg-white dark:bg-ink-700 border border-ink-200 dark:border-ink-600 text-xl font-bold text-ink-700 dark:text-ink-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className={`w-10 h-10 rounded-full bg-white dark:bg-ink-700 border border-ink-200 dark:border-ink-600 text-xl font-bold ${v.isWalkin ? 'text-ink-300 dark:text-ink-500' : 'text-ink-700 dark:text-ink-100'} disabled:opacity-40 disabled:cursor-not-allowed`}
                       >+</button>
                     </div>
                   </div>
                 </div>
 
-                <div className="px-5 pt-3 border-t border-ink-100 dark:border-ink-700" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}>
+                <div className="px-5 pt-3 pb-5 border-t border-ink-100 dark:border-ink-700">
                   {hasDeposit && <p className="text-xs text-ink-500 dark:text-ink-400 mb-2">Deposit of <b className="text-ink-800 dark:text-ink-100">฿{fmtMoney(b.deposit_amount)}</b> is paid in the next step.</p>}
                   <button
                     onClick={() => handleStartBooking(b)}

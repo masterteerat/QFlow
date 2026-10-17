@@ -49,6 +49,16 @@ export default function MyTickets() {
   const [cancelId, setCancelId] = useState(null);
   const [cancelling, setCancelling] = useState(false);
 
+  // Clicking a QR code opens it large and centered with the background faded out
+  const [qrTicket, setQrTicket] = useState(null);
+
+  useEffect(() => {
+    if (!qrTicket) return;
+    const onKey = (e) => { if (e.key === 'Escape') setQrTicket(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [qrTicket]);
+
   const handleCancel = (ticketId) => {
     if (!customer?.id) return toast.error('Please log in again.');
     setCancelId(ticketId);
@@ -137,7 +147,7 @@ export default function MyTickets() {
                     <h3 className="font-display text-lg font-bold text-ink-900 dark:text-white truncate">{t.business_name}</h3>
                     <p className="text-sm text-ink-500 dark:text-ink-400 mt-0.5">
                       {walkin
-                        ? `Walk-in · joined ${t.created_at ? new Date(t.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}`
+                        ? `Walk-in · joined ${t.created_at ? new Date(t.created_at).toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}`
                         : `${fmtDate(t.date)} · ${t.start_time.slice(0, 5)}–${t.end_time.slice(0, 5)}`}
                     </p>
                   </div>
@@ -163,9 +173,13 @@ export default function MyTickets() {
                   <>
                     <Perf />
                     <div className="flex items-center gap-5">
-                      <div className="bg-white p-2.5 rounded-2xl border border-ink-200 shrink-0">
-                        <QRCodeSVG value={t.qr_payload || String(t.ticket_id)} size={116} level="H" />
-                      </div>
+                      <button
+                        onClick={() => setQrTicket(t)}
+                        aria-label="View larger QR code"
+                        className="bg-white p-2.5 rounded-2xl border border-ink-200 shrink-0 hover:border-brand-400 transition-colors focus:outline-none focus-visible:ring-2 focus:ring-brand-500 cursor-pointer"
+                      >
+                        <QRCodeSVG value={t.qr_payload || String(t.ticket_id)} size={150} level="H" />
+                      </button>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-ink-600 dark:text-ink-300 mb-3">Show this code to the staff to check in.</p>
                         <button
@@ -192,6 +206,31 @@ export default function MyTickets() {
         onConfirm={confirmCancel}
         onCancel={() => setCancelId(null)}
       />
+
+      {qrTicket && (
+        <div
+          className="fixed inset-0 bg-ink-950/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setQrTicket(null)}
+        >
+          <div
+            className="bg-white dark:bg-ink-800 rounded-3xl shadow-xl w-full max-w-md p-6 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-ink-800 dark:text-white mb-2">{qrTicket.business_name}</h3>
+            <p className="text-ink-500 dark:text-ink-400 mb-6 text-sm">Show this code to the staff to check in.</p>
+            <QRCodeSVG value={qrTicket.qr_payload || String(qrTicket.ticket_id)} size={280} level="H" className="mx-auto" />
+            <button
+              type="button"
+              onClick={() => setQrTicket(null)}
+              className="mt-6 w-full py-3 rounded-xl font-bold bg-ink-100 dark:bg-ink-700 text-ink-600 dark:text-ink-200 hover:bg-ink-200 dark:hover:bg-ink-600 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

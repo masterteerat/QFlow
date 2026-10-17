@@ -25,6 +25,7 @@ services:
     depends_on:
       - db
     environment:
+      TZ: Asia/Bangkok
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       QR_SECRET: ${QR_SECRET}

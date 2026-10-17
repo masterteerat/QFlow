@@ -6,7 +6,7 @@ import RegisterBusinessModal from './RegisterBusinessModal';
 import QRScannerModal from '../components/QRScannerModal';
 import { api } from '../lib/api';
 import { getOwner } from '../lib/auth';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import TicketsChart from '../components/TicketsChart';
 import { useToast } from '../context/ToastContext';
 
 function ShopThumbnail({ src, alt }) {
@@ -14,7 +14,7 @@ function ShopThumbnail({ src, alt }) {
 
   if (!src || failed) {
     return (
-      <div className="w-full aspect-[16/10] shrink-0 bg-gradient-to-br from-brand-100 dark:from-brand-900/30 to-brand-50 dark:to-brand-900/20 flex items-center justify-center">
+      <div className="w-full h-48 shrink-0 relative overflow-hidden bg-gradient-to-br from-brand-100 dark:from-brand-900/30 to-brand-50 dark:to-brand-900/20 flex items-center justify-center">
         <svg className="w-12 h-12 text-brand-400 dark:text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
@@ -23,12 +23,12 @@ function ShopThumbnail({ src, alt }) {
   }
 
   return (
-    <div className="w-full aspect-[16/10] shrink-0 overflow-hidden bg-ink-100 dark:bg-ink-900 flex items-center justify-center">
+    <div className="w-full h-48 shrink-0 relative overflow-hidden bg-ink-100 dark:bg-ink-900">
       <img
         src={src}
         alt={alt}
         onError={() => setFailed(true)}
-        className="block w-full h-full object-contain"
+        className="block w-full h-full object-cover object-center"
       />
     </div>
   );
@@ -49,7 +49,7 @@ function ShopAvatar({ src, alt }) {
 
   return (
     <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-ink-100 dark:bg-ink-900 flex items-center justify-center">
-      <img src={src} alt={alt} onError={() => setFailed(true)} className="block w-full h-full object-contain" />
+      <img src={src} alt={alt} onError={() => setFailed(true)} className="block w-full h-full object-cover object-center" />
     </div>
   );
 }
@@ -495,25 +495,7 @@ export default function OwnerHome() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-ink-800 p-6 rounded-xl shadow-sm border border-ink-200 dark:border-ink-700 mb-8">
-              <h3 className="text-lg font-bold text-ink-800 dark:text-white mb-4">Tickets per day (last 14 days)</h3>
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analytics.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-ink-100 dark:text-ink-700" vertical={false} />
-                    <XAxis dataKey="date_label" tick={{ fill: 'currentColor' }} className="text-ink-500 dark:text-ink-400 text-xs" axisLine={false} tickLine={false} dy={10} />
-                    <YAxis allowDecimals={false} tick={{ fill: 'currentColor' }} className="text-ink-500 dark:text-ink-400 text-xs" axisLine={false} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.3)', background: '#0f172a', color: '#f1f5f9' }}
-                      labelStyle={{ color: '#f1f5f9' }}
-                      itemStyle={{ color: '#ffa874' }}
-                      cursor={{ stroke: '#cfc7b8', strokeWidth: 1, strokeDasharray: '4 4' }}
-                    />
-                    <Line type="monotone" dataKey="count" name="Tickets" stroke="#f46a1f" strokeWidth={3} dot={{ r: 4, fill: '#f46a1f', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#b93a0a', strokeWidth: 0 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <TicketsChart chartData={analytics.chartData} />
           </div>
         )}
       </div>

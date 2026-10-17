@@ -195,10 +195,20 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess, edi
                   className="text-sm text-ink-600 dark:text-ink-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-ink-700 dark:file:text-brand-400 dark:file:hover:bg-ink-600"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
-                      setImageFile(file);
-                      setImagePreview(URL.createObjectURL(file));
+                    if (!file) return;
+                    const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(file.name);
+                    if (!isImage) {
+                      setError('Only image files (JPG, PNG, WEBP) are allowed.');
+                      e.target.value = '';
+                      return;
                     }
+                    if (file.size > 5 * 1024 * 1024) {
+                      setError('Image must be 5MB or smaller.');
+                      e.target.value = '';
+                      return;
+                    }
+                    setImageFile(file);
+                    setImagePreview(URL.createObjectURL(file));
                   }}
                 />
                 <p className="text-xs text-ink-400 dark:text-ink-500 mt-1">
