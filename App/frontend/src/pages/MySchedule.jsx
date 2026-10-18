@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
 import Navbar from '../components/Navbar';
 import ConfirmModal from '../components/ConfirmModal';
+import CalendarPicker from '../components/CalendarPicker';
 import BanNotice from '../components/BanNotice';
 import { useToast } from '../context/ToastContext';
 
@@ -42,12 +43,6 @@ const formatDateKey = (dateKey) => {
   const date = new Date(y, m - 1, d);
   if (isNaN(date.getTime())) return '';
   return date;
-};
-
-const shiftDate = (dateKey, days) => {
-  const d = formatDateKey(dateKey) || new Date();
-  d.setDate(d.getDate() + days);
-  return toDateKey(d);
 };
 
 const formatDayChip = (dateKey) => {
@@ -354,30 +349,15 @@ export default function MySchedule() {
           </span>
         </div>
 
-        {/* Date picker (native OS calendar) */}
+        {/* Date picker: opens a calendar; days with bookings carry a dot */}
         <div className="mb-2 flex items-center gap-2">
-          <button
-            onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
-            className="w-11 h-11 rounded-xl bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 text-ink-700 dark:text-ink-200 hover:border-brand-400 text-lg font-bold"
-            aria-label="Previous day"
-          >
-            &lt;
-          </button>
-
-          <input
-            type="date"
+          <CalendarPicker
+            className="flex-1 min-w-0"
             value={selectedDate}
-            onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-            className="flex-1 h-11 border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 dark:text-white rounded-xl px-3 text-sm font-bold focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 dark:[color-scheme:dark]"
+            onChange={setSelectedDate}
+            markedDates={datesWithBookings}
+            title="Choose a day"
           />
-
-          <button
-            onClick={() => setSelectedDate(shiftDate(selectedDate, 1))}
-            className="w-11 h-11 rounded-xl bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 text-ink-700 dark:text-ink-200 hover:border-brand-400 text-lg font-bold"
-            aria-label="Next day"
-          >
-            &gt;
-          </button>
 
           {selectedDate !== today && (
             <button

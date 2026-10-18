@@ -6,7 +6,8 @@ import Navbar from '../components/Navbar';
 import BanNotice from '../components/BanNotice';
 import { useToast } from '../context/ToastContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { fmtDate } from '../lib/date';
+import { fmtDate, minusMinutesLabel } from '../lib/date';
+import CalendarPicker from '../components/CalendarPicker';
 import { fmtMoney } from '../lib/money';
 import { Perf, StatusPill } from '../components/TicketParts';
 import HScroller from '../components/HScroller';
@@ -291,6 +292,11 @@ export default function CustomerHome() {
   // Everything a card or the booking sheet needs to know about one shop
   const getShopView = (b) => {
     const isWalkin = b.queue_type === 'walkin';
+    // walk-in shops can set opening hours; outside them nobody can join
+    const isClosedNow = isWalkin && b.is_open_now === false;
+    const hoursLabel = isWalkin && b.walkin_open_time && b.walkin_close_time
+      ? `${String(b.walkin_open_time).slice(0, 5)}–${String(b.walkin_close_time).slice(0, 5)}` : null;
+    const opensAt = b.walkin_open_time ? String(b.walkin_open_time).slice(0, 5) : null;
     const availableDates = isWalkin
       ? []
       : [...new Set(b.time_slots.map((s) => toDateKey(s.date)))]
@@ -314,7 +320,7 @@ export default function CustomerHome() {
         .sort((a, c) => (toDateKey(a.date) + a.start_time).localeCompare(toDateKey(c.date) + c.start_time));
       nextSlot = open[0] || null;
     }
-    return { isWalkin, availableDates, selectedDate, slotsForDate, allSlotsBookedForDate, selectedSlotObj, maxPax, currentPax, nextSlot };
+    return { isWalkin, isClosedNow, hoursLabel, opensAt, availableDates, selectedDate, slotsForDate, allSlotsBookedForDate, selectedSlotObj, maxPax, currentPax, nextSlot };
   };
 
   // Ranked recommendation: walk-ins first (open now), then the soonest open slot.
@@ -323,7 +329,7 @@ export default function CustomerHome() {
     return [...businesses]
       .map((b) => {
         const v = getShopView(b);
-        if (v.isWalkin) return { b, v, key: nowKey };
+        if (v.isWalkin) return v.isClosedNow ? null : { b, v, key: nowKey };
         if (!v.nextSlot) return null;
         return { b, v, key: `${toDateKey(v.nextSlot.date)} ${v.nextSlot.start_time}` };
       })
@@ -546,7 +552,7 @@ export default function CustomerHome() {
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {filteredBusinesses.map((b) => {
               const v = getShopView(b);
-              const unavailable = !v.isWalkin && !v.nextSlot;
+              const unavailable = (!v.isWalkin && !v.nextSlot) || v.isClosedNow;
               return (
                 <article key={b.business_id} onClick={() => setSheetId(b.business_id)} className="cursor-pointer bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition flex flex-col">
                   <div className="relative">
@@ -566,7 +572,11 @@ export default function CustomerHome() {
 
                     <div className="mt-auto pt-4 flex items-center justify-between gap-3">
                       <div className="text-sm min-w-0">
-                        {v.isWalkin ? (
+                        {v.isClosedNow ? (
+                          <span className="block font-bold text-ink-500 dark:text-ink-400">
+                            Closed now<span className="block text-xs font-semibold">Opens {v.opensAt}</span>
+                          </span>
+                        ) : v.isWalkin ? (
                           <span className="flex items-center gap-2 font-bold text-emerald-700 dark:text-emerald-400">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />Take a ticket now
                           </span>
@@ -629,7 +639,9 @@ export default function CustomerHome() {
                     )}
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold">
-                      {v.isWalkin ? (
+                      {v.isClosedNow ? (
+                        <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">Closed now · Opens {v.opensAt}</span>
+                      ) : v.isWalkin ? (
                         <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
@@ -643,6 +655,7 @@ export default function CustomerHome() {
                       ) : (
                         <span className="text-ink-400 dark:text-ink-500">No open times today</span>
                       )}
+                      {v.hoursLabel && <span className="text-ink-500 dark:text-ink-400">Hours {v.hoursLabel}</span>}
                       {hasDeposit && (
                         <span className="text-ink-500 dark:text-ink-400">Deposit ฿{fmtMoney(b.deposit_amount)}</span>
                       )}
@@ -650,29 +663,29 @@ export default function CustomerHome() {
                   </div>
 
                   {v.isWalkin ? (
-                    <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 text-sm text-emerald-900 dark:text-emerald-200">
-                      <p className="font-bold">Walk-in queue</p>
-                      <p className="mt-0.5">You get a ticket right away. Show the QR code to the staff when you arrive.</p>
-                    </div>
+                    v.isClosedNow ? (
+                      <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4 text-sm text-rose-900 dark:text-rose-200">
+                        <p className="font-bold">Closed now</p>
+                        <p className="mt-0.5">This shop takes walk-in tickets from {v.hoursLabel}. Come back at {v.opensAt}.</p>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 text-sm text-emerald-900 dark:text-emerald-200">
+                        <p className="font-bold">Walk-in queue</p>
+                        <p className="mt-0.5">You get a ticket right away. Show the QR code to the staff when you arrive.</p>
+                        <p className="mt-1 text-xs opacity-80">You can cancel any time until you are checked in.</p>
+                      </div>
+                    )
                   ) : (
                     <>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Day</h3>
-                      <HScroller wheel inlineArrows wrapperClassName="-mx-5 md:mx-0" className="gap-2 px-5 md:px-0 pb-1 snap-x">
-                        {v.availableDates.map((dk) => {
-                          const lab = formatDateLabel(dk);
-                          const on = dk === v.selectedDate;
-                          return (
-                            <button
-                              key={dk}
-                              onClick={() => handleSelectDate(b.business_id, dk)}
-                              className={`shrink-0 snap-start min-w-[4.75rem] px-2 py-2.5 rounded-2xl border text-center ${on ? 'bg-ink-900 dark:bg-brand-600 border-ink-900 dark:border-brand-600 text-white' : 'bg-white dark:bg-ink-700 border-ink-200 dark:border-ink-600 text-ink-800 dark:text-ink-100 hover:border-brand-400'}`}
-                            >
-                              <span className="block text-[10px] leading-4 font-bold uppercase tracking-wide opacity-80">{lab.top}</span>
-                              <span className="block text-lg font-extrabold font-display">{dk.slice(8, 10)}</span>
-                            </button>
-                          );
-                        })}
-                      </HScroller>
+                      <CalendarPicker
+                        value={v.selectedDate}
+                        onChange={(dk) => handleSelectDate(b.business_id, dk)}
+                        enabledDates={new Set(v.availableDates)}
+                        min={v.availableDates[0]}
+                        max={v.availableDates[v.availableDates.length - 1]}
+                        title="Choose a day"
+                      />
 
                       <h3 className="text-xs font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400 mt-5 mb-2">Time</h3>
                       <div className="grid grid-cols-2 gap-2">
@@ -698,6 +711,13 @@ export default function CustomerHome() {
                         })}
                       </div>
                       {v.slotsForDate.length === 0 && <p className="text-sm text-ink-500 dark:text-ink-400">No times on this day.</p>}
+                      <p className="mt-3 text-xs text-ink-500 dark:text-ink-400">
+                        {v.selectedSlotObj
+                          ? (Number(b.cancel_before_minutes) === 0
+                              ? <>Free cancellation until the slot starts ({minusMinutesLabel(toDateKey(v.selectedSlotObj.date), v.selectedSlotObj.start_time, 0)}).</>
+                              : <>Free cancellation until <b className="text-ink-700 dark:text-ink-200">{minusMinutesLabel(toDateKey(v.selectedSlotObj.date), v.selectedSlotObj.start_time, b.cancel_before_minutes)}</b>. After that the booking can't be cancelled.</>)
+                          : 'Pick a time to see the cancellation deadline.'}
+                      </p>
                     </>
                   )}
 
@@ -733,10 +753,10 @@ export default function CustomerHome() {
                   {hasDeposit && <p className="text-xs text-ink-500 dark:text-ink-400 mb-2">Deposit of <b className="text-ink-800 dark:text-ink-100">฿{fmtMoney(b.deposit_amount)}</b> is paid in the next step.</p>}
                   <button
                     onClick={() => handleStartBooking(b)}
-                    disabled={needsSlot || v.allSlotsBookedForDate}
-                    className={`w-full py-3.5 rounded-2xl font-extrabold text-white text-base ${needsSlot || v.allSlotsBookedForDate ? 'bg-ink-300 dark:bg-ink-600 cursor-not-allowed' : 'bg-brand-700 hover:bg-brand-800 shadow-md'}`}
+                    disabled={needsSlot || v.allSlotsBookedForDate || v.isClosedNow}
+                    className={`w-full py-3.5 rounded-2xl font-extrabold text-white text-base ${needsSlot || v.allSlotsBookedForDate || v.isClosedNow ? 'bg-ink-300 dark:bg-ink-600 cursor-not-allowed' : 'bg-brand-700 hover:bg-brand-800 shadow-md'}`}
                   >
-                    {v.isWalkin ? (hasDeposit ? `Continue · ฿${fmtMoney(b.deposit_amount)}` : 'Join the queue') : needsSlot ? 'Choose a time' : hasDeposit ? `Continue · ฿${fmtMoney(b.deposit_amount)}` : 'Confirm booking'}
+                    {v.isClosedNow ? `Closed now · Opens ${v.opensAt}` : v.isWalkin ? (hasDeposit ? `Continue · ฿${fmtMoney(b.deposit_amount)}` : 'Join the queue') : needsSlot ? 'Choose a time' : hasDeposit ? `Continue · ฿${fmtMoney(b.deposit_amount)}` : 'Confirm booking'}
                   </button>
                 </div>
               </div>

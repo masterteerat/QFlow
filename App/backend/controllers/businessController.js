@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const pool = require('../config/db');
 const multer = require('multer');
+const SubscriptionModel = require('../models/subscriptionModel');
 const BusinessModel = require('../models/businessModel');
 const mailer = require('../mailer');
 
@@ -66,12 +67,43 @@ function validateSlots(slots) {
 
 const parseCategory = (v) => { const n = Number(v); return v && Number.isInteger(n) ? n : null; };
 
-function validateBusinessFields({ business_name, is_deposit, deposit_amount }) {
-  if (!business_name || !business_name.trim()) return 'Please enter a business name.';
-  if (is_deposit && (!deposit_amount || Number(deposit_amount) <= 0)) {
-    return 'Please enter a valid deposit amount (greater than 0).';
+const CANCEL_OPTIONS = [1440, 360, 120, 60, 30, 0]; // minutes before the slot starts; 0 = until it starts
+
+// Deposit must look like a plain money amount: 120 or 120.50 (max 2 decimals), > 0 and not absurdly large.
+function validateDeposit(is_deposit, deposit_amount) {
+  if (!is_deposit) return null;
+  const raw = String(deposit_amount ?? '').trim();
+  if (!/^\d{1,7}(\.\d{1,2})?$/.test(raw) || Number(raw) <= 0) {
+    return 'Please enter a valid deposit amount (greater than 0, at most 2 decimals).';
   }
+  if (Number(raw) > 100000) return 'Deposit amount is too large (max 100,000).';
   return null;
+}
+
+// Walk-in opening hours: both empty = open all day; otherwise both required, same day, open < close.
+// Returns { error } or { open, close } (HH:MM:SS strings or null).
+function parseWalkinHours(open, close) {
+  const o = String(open ?? '').trim(), c = String(close ?? '').trim();
+  if (!o && !c) return { open: null, close: null };
+  if (!o || !c) return { error: 'Please set both an opening and a closing time.' };
+  if (!TIME_RE.test(o) || !TIME_RE.test(c)) return { error: 'Opening hours must be in HH:MM format.' };
+  if (toMin(o) >= toMin(c)) return { error: 'Opening time must be before closing time (same day, e.g. 09:00-18:00).' };
+  const pad = (t) => { const [h, m] = t.split(':'); return `${h.padStart(2, '0')}:${m}:00`; };
+  return { open: pad(o), close: pad(c) };
+}
+
+// undefined = not sent (keep current value on update, default on create)
+function parseCancelBefore(v) {
+  if (v === undefined || v === null || v === '') return { value: undefined };
+  const n = Number(v);
+  if (!Number.isInteger(n) || !CANCEL_OPTIONS.includes(n)) return { error: 'Invalid cancellation deadline.' };
+  return { value: n };
+}
+
+function validateBusinessFields({ business_name, is_deposit, deposit_amount }) {
+  if (typeof business_name !== 'string' || !business_name.trim()) return 'Please enter a business name.';
+  if (business_name.trim().length > 200) return 'Business name is too long (max 200 characters).';
+  return validateDeposit(is_deposit, deposit_amount);
 }
 
 function parseTimeSlots(raw) {
@@ -154,9 +186,12 @@ exports.createBusiness = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid time slots format.' });
   }
 
+  const hours = parseWalkinHours(req.body.walkin_open_time, req.body.walkin_close_time);
+  const cancel = parseCancelBefore(req.body.cancel_before_minutes);
   const validationError =
     validateBusinessFields({ business_name, is_deposit: isDeposit, deposit_amount }) ||
-    (queue_type === 'timeslot' ? validateSlots(time_slots) : null);
+    (queue_type === 'timeslot' ? validateSlots(time_slots) : hours.error) ||
+    cancel.error;
   if (validationError) {
     discardUpload(req);
     return res.status(400).json({ success: false, message: validationError });
@@ -177,13 +212,19 @@ exports.createBusiness = async (req, res) => {
       deposit_amount: isDeposit ? Number(deposit_amount) : 0,
       owner_id,
       category_id: parseCategory(category_id),
-      queue_type: queue_type === 'timeslot' ? 'timeslot' : 'walkin'
+      queue_type: queue_type === 'timeslot' ? 'timeslot' : 'walkin',
+      walkin_open_time: hours.open,
+      walkin_close_time: hours.close,
+      cancel_before_minutes: cancel.value ?? 60
     });
 
     let insertedSlots = [];
     if (queue_type === 'timeslot') {
       insertedSlots = await BusinessModel.addTimeSlots(client, business.business_id, time_slots);
     }
+
+    // The shop starts unpaid ('Pending'): hidden from customers until the first monthly fee is paid.
+    await SubscriptionModel.createPending(client, business.business_id);
 
     await client.query('COMMIT');
     res.status(201).json({
@@ -218,12 +259,24 @@ exports.updateBusiness = async (req, res) => {
 
   // FIX: update used to skip the deposit check and accept "time slots" with zero slots
   // (which silently wiped the schedule). Same rules as create now.
+  const hours = parseWalkinHours(req.body.walkin_open_time, req.body.walkin_close_time);
+  const cancel = parseCancelBefore(req.body.cancel_before_minutes);
   const validationError =
     validateBusinessFields({ business_name, is_deposit: isDeposit, deposit_amount }) ||
-    (queue_type === 'timeslot' ? validateSlots(time_slots) : null);
+    (queue_type === 'timeslot' ? validateSlots(time_slots) : queue_type === 'walkin' ? hours.error : null) ||
+    cancel.error;
   if (validationError) {
     discardUpload(req);
     return res.status(400).json({ success: false, message: validationError });
+  }
+
+  // A plain "Save" on a time-slot shop sends the same slots back: don't rewrite the schedule then.
+  let scheduleUnchanged = false;
+  if (queue_type === 'timeslot') {
+    try {
+      const cur = await pool.query('SELECT queue_type FROM business WHERE business_id = $1', [businessId]);
+      scheduleUnchanged = cur.rows[0]?.queue_type === 'timeslot' && await BusinessModel.isSameSchedule(businessId, time_slots);
+    } catch { scheduleUnchanged = false; }
   }
 
   let client;
@@ -238,14 +291,17 @@ exports.updateBusiness = async (req, res) => {
       is_deposit: isDeposit,
       deposit_amount: isDeposit ? Number(deposit_amount) : 0,
       category_id: parseCategory(category_id),
-      queue_type: queue_type === 'timeslot' || queue_type === 'walkin' ? queue_type : undefined
+      queue_type: queue_type === 'timeslot' || queue_type === 'walkin' ? queue_type : undefined,
+      walkin_open_time: hours.open,
+      walkin_close_time: hours.close,
+      cancel_before_minutes: cancel.value
     });
 
     // Switching to "timeslot" (re)writes the upcoming schedule; switching to
     // "walkin" clears any upcoming unbooked slots so the shop goes back to walk-in.
     let updatedSlots = [];
     if (queue_type === 'timeslot') {
-      updatedSlots = await BusinessModel.updateSchedule(client, businessId, time_slots);
+      if (!scheduleUnchanged) updatedSlots = await BusinessModel.updateSchedule(client, businessId, time_slots);
     } else if (queue_type === 'walkin') {
       updatedSlots = await BusinessModel.updateSchedule(client, businessId, []);
     }
@@ -302,47 +358,54 @@ exports.deleteBusiness = async (req, res) => {
   const { businessId } = req.params;
   const owner_id = req.user.id;
 
+  let client;
+  let toNotify = [];
   try {
-    // requireBusinessOwner already checks this; the DELETE itself is also scoped to the owner
-    // Tell customers with active bookings before their tickets disappear (best effort)
-    try {
-      const { rows } = await pool.query(
-        `SELECT DISTINCT c.email, c.fname, c.lname, b.business_name
-           FROM ticket t JOIN queue q ON q.queue_id = t.queue_id JOIN business b ON b.business_id = q.business_id
-           JOIN customer c ON c.customer_id = t.customer_id
-          WHERE q.business_id = $1 AND t.status_id IN (1, 2) AND q.date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::date`, [businessId]);
-      for (const r of rows) await mailer.sendShopClosedEmail(r.email, `${r.fname} ${r.lname}`, r.business_name).catch(() => {});
-    } catch (e) { console.error('Shop-closed notify error:', e.message); }
-
+    client = await pool.connect();
+    await client.query('BEGIN');
     // Soft delete: the shop disappears for everyone, but tickets and payments stay as history.
-    // Active bookings are cancelled ('shop_closed') and their deposits marked Refunded.
-    const client = await pool.connect();
-    let closed = false;
-    try {
-      await client.query('BEGIN');
-      const own = await client.query('UPDATE business SET is_active = FALSE WHERE business_id = $1 AND owner_id = $2 AND is_active RETURNING business_id', [businessId, owner_id]);
-      if (own.rows.length > 0) {
-        closed = true;
-        const t = await client.query(
-          `UPDATE ticket t SET status_id = 4, cancelled_at = NOW(), cancelled_by = 'shop_closed'
-             FROM queue q WHERE q.queue_id = t.queue_id AND q.business_id = $1 AND t.status_id IN (1, 2) RETURNING t.ticket_id`, [businessId]);
-        if (t.rows.length) await client.query('UPDATE payment SET status_id = 3 WHERE ticket_id = ANY($1::int[])', [t.rows.map((r) => r.ticket_id)]);
-      }
-      await client.query('COMMIT');
-    } catch (e) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw e;
-    } finally {
-      client.release();
-    }
-    if (!closed) {
+    const own = await client.query(
+      'UPDATE business SET is_active = FALSE WHERE business_id = $1 AND owner_id = $2 AND is_active RETURNING business_id, business_name',
+      [businessId, owner_id]);
+    if (own.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
-    res.json({ success: true, message: 'Shop closed. Customers with active bookings were cancelled and notified.' });
+    const shopName = own.rows[0].business_name;
+
+    // Who to tell: customers with an active booking today or later (collected BEFORE we cancel them)
+    const who = await client.query(
+      `SELECT DISTINCT c.email, c.fname, c.lname
+         FROM ticket t JOIN queue q ON q.queue_id = t.queue_id
+         JOIN customer c ON c.customer_id = t.customer_id
+        WHERE q.business_id = $1 AND t.status_id IN (1, 2) AND q.date >= (NOW() AT TIME ZONE 'Asia/Bangkok')::date`,
+      [businessId]);
+    toNotify = who.rows.map((r) => ({ ...r, shopName }));
+
+    // Active bookings are cancelled ('shop_closed') and their deposits marked Refunded.
+    const t = await client.query(
+      `UPDATE ticket t SET status_id = 4, cancelled_at = NOW(), cancelled_by = 'shop_closed'
+         FROM queue q WHERE q.queue_id = t.queue_id AND q.business_id = $1 AND t.status_id IN (1, 2) RETURNING t.ticket_id`,
+      [businessId]);
+    if (t.rows.length) await client.query('UPDATE payment SET status_id = 3 WHERE ticket_id = ANY($1::int[])', [t.rows.map((r) => r.ticket_id)]);
+    await client.query('COMMIT');
   } catch (error) {
+    await client?.query('ROLLBACK').catch(() => {});
     console.error('Delete business error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  } finally {
+    client?.release();
   }
+
+  res.json({ success: true, message: 'Shop closed. Customers with active bookings were cancelled and notified.' });
+
+  // Only now (transaction committed) tell the customers, in the background so the owner is not kept waiting.
+  setImmediate(async () => {
+    for (const r of toNotify) {
+      try { await mailer.sendShopClosedEmail(r.email, `${r.fname} ${r.lname}`, r.shopName); }
+      catch (e) { console.error('Shop-closed email error:', e.message); }
+    }
+  });
 };
 
 exports.uploadBusinessImage = uploadBusinessImage;

@@ -19,4 +19,5 @@ Thumbs.db
 # your built React files here during local development
 public/
 public/
-uploads/business/
+uploads/business/*
+!uploads/business/default-business.jpg

@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import ConfirmModal from '../components/ConfirmModal';
 import BanNotice from '../components/BanNotice';
 import { QRCodeSVG } from 'qrcode.react';
-import { fmtDate } from '../lib/date';
+import { fmtDate, fmtDeadline } from '../lib/date';
 import { fmtMoney } from '../lib/money';
 import { useToast } from '../context/ToastContext';
 import { Perf, StatusPill } from '../components/TicketParts';
@@ -182,12 +182,23 @@ export default function MyTickets() {
                       </button>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-ink-600 dark:text-ink-300 mb-3">Show this code to the staff to check in.</p>
-                        <button
-                          onClick={() => handleCancel(t.ticket_id)}
-                          className="w-full px-4 py-2.5 rounded-xl text-sm font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/25 hover:bg-rose-100 dark:hover:bg-rose-900/45"
-                        >
-                          Cancel ticket
-                        </button>
+                        {t.can_cancel === false ? (
+                          <p className="rounded-xl bg-ink-100 dark:bg-ink-700 px-3 py-2.5 text-xs font-semibold text-ink-600 dark:text-ink-200">
+                            Cancellation closed at {fmtDeadline(t.cancel_deadline)}. If you don&apos;t show up this counts as a no-show.
+                          </p>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleCancel(t.ticket_id)}
+                              className="w-full px-4 py-2.5 rounded-xl text-sm font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/25 hover:bg-rose-100 dark:hover:bg-rose-900/45"
+                            >
+                              Cancel ticket
+                            </button>
+                            {t.cancel_deadline && (
+                              <p className="mt-1.5 text-xs text-ink-500 dark:text-ink-400">Free cancellation until {fmtDeadline(t.cancel_deadline)}</p>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   </>

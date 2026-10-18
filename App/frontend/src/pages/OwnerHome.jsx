@@ -7,6 +7,7 @@ import QRScannerModal from '../components/QRScannerModal';
 import { api } from '../lib/api';
 import { getOwner } from '../lib/auth';
 import TicketsChart from '../components/TicketsChart';
+import PaymentModal, { SubscriptionBadge } from '../components/PaymentModal';
 import { useToast } from '../context/ToastContext';
 
 function ShopThumbnail({ src, alt }) {
@@ -79,6 +80,7 @@ export default function OwnerHome() {
 
   const owner = getOwner();
   const { toast } = useToast();
+  const [paymentShop, setPaymentShop] = useState(null); // shop whose monthly fee is being paid
 
   const selectedShop = businessId
     ? myShops.find((s) => String(s.business_id) === businessId)
@@ -186,7 +188,7 @@ export default function OwnerHome() {
     try {
       const result = await api.delete(`/owner/businesses/${shopToDelete.business_id}`);
       if (result.success) {
-        toast.success('Shop deleted successfully');
+        toast.success('Shop closed. Active bookings were cancelled.');
         setShowDeleteModal(false);
         setShopToDelete(null);
         setShowScanner(false);
@@ -205,6 +207,9 @@ export default function OwnerHome() {
   // Bangkok "today" as YYYY-MM-DD; bookings for later days are shown but can't be checked in yet
   const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
   const isFuture = (t) => !!t.date && t.date > todayStr;
+  // A no-show can only be recorded once the booked time has ended (the server enforces this too).
+  const bkkNowHHMM = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+  const noShowTooEarly = (t) => isFuture(t) || (!t.is_walkin && t.date === todayStr && String(t.end_time).slice(0, 5) > bkkNowHHMM);
   const waitingList = queueList.filter((t) => t.status_id === 1);
   const servingList = queueList.filter((t) => t.status_id === 2);
 
@@ -270,7 +275,22 @@ export default function OwnerHome() {
                       </div>
 
                       {shop.description && (
-                        <p className="text-sm text-ink-500 dark:text-ink-400 mb-4 line-clamp-2">{shop.description}</p>
+                        <p className="text-sm text-ink-500 dark:text-ink-400 mb-3 line-clamp-2">{shop.description}</p>
+                      )}
+
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <SubscriptionBadge sub={shop.subscription} />
+                        {shop.subscription && (shop.subscription.status !== 'Active' || shop.subscription.days_left <= 7) && (
+                          <button
+                            onClick={() => setPaymentShop(shop)}
+                            className="text-xs font-bold text-white bg-brand-700 hover:bg-brand-800 px-3 py-1 rounded-full"
+                          >
+                            {shop.subscription.status === 'Active' ? 'Renew' : `Pay ฿${fmtMoney(shop.subscription.price)}`}
+                          </button>
+                        )}
+                      </div>
+                      {shop.subscription && shop.subscription.status !== 'Active' && (
+                        <p className="text-xs text-rose-700 dark:text-rose-300 mb-3">Hidden from customers until the monthly fee is paid.</p>
                       )}
 
                       <div className="grid grid-cols-2 gap-2 mb-4 mt-auto">
@@ -330,6 +350,7 @@ export default function OwnerHome() {
                     <span className="px-2.5 py-0.5 rounded-full bg-ink-100 dark:bg-ink-700 text-ink-700 dark:text-ink-200 text-xs font-bold">
                       {selectedShop.is_deposit ? `Deposit ฿${fmtMoney(selectedShop.deposit_amount)}` : 'No deposit'}
                     </span>
+                    <SubscriptionBadge sub={selectedShop.subscription} />
                   </div>
                 </div>
               </div>
@@ -410,7 +431,8 @@ export default function OwnerHome() {
                       </button>
                       <button
                         onClick={() => handleAction(t.ticket_id, 'no-show')}
-                        disabled={actionLoadingId === t.ticket_id || isFuture(t)}
+                        disabled={actionLoadingId === t.ticket_id || noShowTooEarly(t)}
+                        title={noShowTooEarly(t) ? 'Available once the booked time has ended' : undefined}
                         className="bg-rose-50 dark:bg-rose-900/25 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/45 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 sm:py-2 rounded-xl font-bold text-sm whitespace-nowrap"
                       >
                         No-show
@@ -464,7 +486,7 @@ export default function OwnerHome() {
                         {t.pax > 1 && <span className="ml-2 text-xs text-ink-400">× {t.pax}</span>}
                       </span>
                       <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${t.cancelled_by === 'no_show' ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300' : 'bg-ink-100 dark:bg-ink-700 text-ink-600 dark:text-ink-300'}`}>
-                        {t.cancelled_by === 'no_show' ? 'No-show' : t.cancelled_by === 'customer' ? 'Cancelled by customer' : t.cancelled_by === 'expired' ? 'Expired (never arrived)' : 'Cancelled'}
+                        {t.cancelled_by === 'no_show' ? 'No-show' : t.cancelled_by === 'customer' ? 'Cancelled by customer' : t.cancelled_by === 'expired' ? 'Expired (never arrived)' : t.cancelled_by === 'shop_closed' ? 'Shop closed' : 'Cancelled'}
                       </span>
                       <span className="text-xs text-ink-500 dark:text-ink-400 w-full sm:w-auto">
                         {t.date} {t.is_walkin ? '(Walk-in)' : `${t.start_time.slice(0, 5)}–${t.end_time.slice(0, 5)}`} · cancelled {new Date(t.cancelled_at).toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -504,10 +526,20 @@ export default function OwnerHome() {
         <RegisterBusinessModal
           ownerId={owner?.id}
           onClose={() => setShowRegisterModal(false)}
-          onSuccess={() => {
+          onSuccess={(newShop) => {
             setShowRegisterModal(false);
             fetchMyShops();
+            // the shop only goes live once the first monthly fee is paid
+            if (newShop?.business_id) setPaymentShop(newShop);
           }}
+        />
+      )}
+
+      {paymentShop && (
+        <PaymentModal
+          shop={paymentShop}
+          onClose={() => setPaymentShop(null)}
+          onPaid={() => { fetchMyShops(); toast.success('Monthly fee paid'); }}
         />
       )}
 
@@ -515,7 +547,7 @@ export default function OwnerHome() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-ink-800 rounded-xl shadow-lg w-full max-w-md p-8 text-center">
             <h3 className="text-xl font-bold text-ink-800 dark:text-white mb-4">Delete Shop</h3>
-            <p className="text-ink-500 dark:text-ink-400 mb-6">Are you sure you want to delete <strong>{shopToDelete?.business_name}</strong>? This action cannot be undone and will also delete all associated time slots, queues, and tickets.</p>
+            <p className="text-ink-500 dark:text-ink-400 mb-6">Are you sure you want to delete <strong>{shopToDelete?.business_name}</strong>? The shop will disappear for customers. Everyone with an active booking is cancelled (deposits marked refunded) and emailed. Past tickets stay as history. This can't be undone.</p>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => { setShowDeleteModal(false); setShopToDelete(null); }}

@@ -14,8 +14,14 @@ if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PRO
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' }, crossOriginOpenerPolicy: false }));
 // Same-origin by default. For a separate frontend origin set CORS_ORIGIN=https://app.example.com (comma-separated).
 app.use(cors({ origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()) : false }));
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '100kb' }));
+
+// Where the built React app lives: backend/public (Docker / `npm run build`), or the frontend's own
+// dist folder as a fallback when it was built in place.
+const PUBLIC_DIR = fs.existsSync(path.join(__dirname, 'public', 'index.html'))
+  ? path.join(__dirname, 'public')
+  : path.join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(PUBLIC_DIR));
 
 // Populates req.user from the Authorization: Bearer <token> header, when present.
 app.use(authenticate);
@@ -44,7 +50,7 @@ app.use('/api', (req, res) => {
 
 // React Router handles everything else client-side
 app.get('*', (req, res) => {
-  const index = path.join(__dirname, 'public', 'index.html');
+  const index = path.join(PUBLIC_DIR, 'index.html');
   if (!fs.existsSync(index)) {
     return res.status(404).send('Frontend not built. Run `npm run build` in App/frontend (it outputs to backend/public).');
   }
@@ -54,6 +60,14 @@ app.get('*', (req, res) => {
 // Last-resort error handler: always JSON, never an HTML stack trace
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
+  // Bad client input is the client's problem: 400 / 413, not a 500
+  if (err.type === 'entity.too.large') return res.status(413).json({ success: false, message: 'Request is too large.' });
+  if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && err.status === 400)) {
+    return res.status(400).json({ success: false, message: 'Invalid JSON in request body.' });
+  }
+  if (err.status && err.status >= 400 && err.status < 500) {
+    return res.status(err.status).json({ success: false, message: 'Bad request.' });
+  }
   console.error('Unhandled error:', err);
   res.status(500).json({ success: false, message: 'Internal server error' });
 });

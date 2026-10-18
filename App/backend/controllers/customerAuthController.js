@@ -298,6 +298,31 @@ exports.unsubscribe = async (req, res) => {
   }
 };
 
+// POST /api/customer/dev-unban - TEST ONLY: lets a customer lift their own ban.
+// Same switch as Quick Login (ENABLE_DEV_LOGIN=true and NODE_ENV != production); remove before going live.
+exports.devUnban = async (req, res) => {
+  if (!require('../utils/devLogin').isDevLoginEnabled()) {
+    return res.status(404).json({ success: false, message: 'Not found' });
+  }
+  try {
+    // Behaves exactly like the timer running out: the row stays (so the next no-show still escalates) and
+    // only banned_at moves into the past. A permanent ban never times out, so for the test it is
+    // stepped down to an already-expired Temporary Ban (next no-show -> Permanent again).
+    await pool.query(
+      `UPDATE blacklist b
+          SET tier_id = CASE WHEN t.time = 0 THEN COALESCE((SELECT tier_id FROM tier WHERE name = 'Temporary Ban' LIMIT 1), b.tier_id) ELSE b.tier_id END,
+              banned_at = NOW() - INTERVAL '1 second' -
+                (COALESCE(CASE WHEN t.time = 0 THEN (SELECT time FROM tier WHERE name = 'Temporary Ban' LIMIT 1) ELSE t.time END, 0) * INTERVAL '1 minute')
+         FROM tier t
+        WHERE t.tier_id = b.tier_id AND b.customer_id = $1`,
+      [req.user.id]);
+    res.json({ success: true, message: 'Ban lifted (test mode).' });
+  } catch (error) {
+    console.error('Dev unban error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 exports.getBanStatus = async (req, res) => {
   try {
     const ban = await require('../models/blacklistModel').getActiveBan(req.user.id);

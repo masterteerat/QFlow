@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { rateLimit } = require('../utils/rateLimit');
 const loginLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+const signupLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, byEmail: false, message: 'Too many sign-ups from this network. Please try again later.' });
 const otpLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 const resendLimit = rateLimit({ windowMs: 60 * 1000, max: 1, message: 'Please wait a minute before requesting another code.' });
 
@@ -15,7 +16,7 @@ const { requireAuth, requireRole, requireSelf, requirePermission, requireBusines
 const ownerOnly = [requireAuth, requireRole('owner')];
 
 // ---------- public ----------
-router.post('/signup', auth.signup);
+router.post('/signup', signupLimit, auth.signup);
 router.post('/login', loginLimit, auth.login);
 router.post('/dev-login', auth.devLogin);
 router.post('/verify-otp', otpLimit, auth.verifyOTP);
@@ -37,6 +38,13 @@ router.post('/businesses', ...ownerOnly,
 router.put('/businesses/:businessId', ...ownerOnly,
   requirePermission('business', 'update'), requireBusinessOwner(),
   business.uploadBusinessImage, business.updateBusiness);
+
+// monthly platform fee (demo payment)
+const subscription = require('../controllers/subscriptionController');
+router.get('/businesses/:businessId/subscription', ...ownerOnly,
+  requirePermission('business', 'read'), requireBusinessOwner(), subscription.getSubscription);
+router.post('/businesses/:businessId/subscription/pay', ...ownerOnly,
+  requirePermission('business', 'update'), requireBusinessOwner(), subscription.paySubscription);
 
 router.get('/businesses/:businessId/schedule', ...ownerOnly,
   requirePermission('schedule', 'read'), requireBusinessOwner(), business.getSchedule);

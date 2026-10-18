@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { rateLimit } = require('../utils/rateLimit');
 const loginLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+const signupLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, byEmail: false, message: 'Too many sign-ups from this network. Please try again later.' });
 const otpLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 const resendLimit = rateLimit({ windowMs: 60 * 1000, max: 1, message: 'Please wait a minute before requesting another code.' });
 
@@ -13,7 +14,7 @@ const ticket = require('../controllers/ticketController');
 const customerOnly = [requireAuth, requireRole('customer')];
 
 // ---------- public ----------
-router.post('/signup', auth.signup);
+router.post('/signup', signupLimit, auth.signup);
 router.post('/login', loginLimit, auth.login);
 router.post('/dev-login', auth.devLogin);
 router.post('/verify-otp', otpLimit, auth.verifyOTP);
@@ -41,6 +42,8 @@ router.patch('/notification-preference', ...customerOnly,
 
 router.get('/unsubscribe', auth.unsubscribe);
 router.get('/ban-status', ...customerOnly, auth.getBanStatus);
+// TEST ONLY (needs ENABLE_DEV_LOGIN=true, never in production): customer lifts their own ban
+router.post('/dev-unban', ...customerOnly, auth.devUnban);
 
 router.get('/profile/:id', ...customerOnly, requireSelf('id'), auth.getProfile);
 router.put('/profile/:id', ...customerOnly, requireSelf('id'), auth.updateProfile);

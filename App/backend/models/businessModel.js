@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { SHOP_IS_PAID, SUBSCRIPTION_JSON } = require('./subscriptionModel');
 
 const BKK_TODAY = `(NOW() AT TIME ZONE 'Asia/Bangkok')::date`;
 const BKK_NOW_TIME = `(NOW() AT TIME ZONE 'Asia/Bangkok')::time`;
@@ -18,6 +19,11 @@ const BusinessModel = {
         c.name AS category_name,
         c.category_id,
         b.queue_type,
+        b.walkin_open_time::text AS walkin_open_time,
+        b.walkin_close_time::text AS walkin_close_time,
+        b.cancel_before_minutes,
+        (b.queue_type <> 'walkin' OR b.walkin_open_time IS NULL OR b.walkin_close_time IS NULL
+          OR (${BKK_NOW_TIME} >= b.walkin_open_time AND ${BKK_NOW_TIME} < b.walkin_close_time)) AS is_open_now,
         COALESCE(
           JSON_AGG(
             JSON_BUILD_OBJECT(
@@ -36,6 +42,7 @@ const BusinessModel = {
       FROM business b
       LEFT JOIN time_slot ts ON ts.business_id = b.business_id
         AND b.queue_type = 'timeslot'
+        AND NOT ts.is_hidden
         AND ts.date BETWEEN ${BKK_TODAY} AND ${BKK_TODAY} + 13
         AND (ts.date > ${BKK_TODAY} OR ts.end_time > ${BKK_NOW_TIME})
       LEFT JOIN category c ON c.category_id = b.category_id
@@ -44,7 +51,7 @@ const BusinessModel = {
         WHERE timeslot_id IS NOT NULL AND status_id <> 4
         GROUP BY timeslot_id
       ) booked ON booked.timeslot_id = ts.timeslot_id
-      WHERE b.is_active
+      WHERE b.is_active AND ${SHOP_IS_PAID}
     `;
 
     const params = [];
@@ -85,7 +92,7 @@ const BusinessModel = {
     if (!business) return null;
     const slotsResult = await pool.query(
       `SELECT timeslot_id, date, start_time, end_time, max_capacity
-       FROM time_slot WHERE business_id = $1 AND date >= ${BKK_TODAY} ORDER BY date ASC, start_time ASC`,
+       FROM time_slot WHERE business_id = $1 AND NOT is_hidden AND date >= ${BKK_TODAY} ORDER BY date ASC, start_time ASC`,
       [businessId]
     );
     business.time_slots = slotsResult.rows;
@@ -106,6 +113,10 @@ const BusinessModel = {
         c.name AS category_name,
         c.category_id,
         b.queue_type,
+        b.walkin_open_time::text AS walkin_open_time,
+        b.walkin_close_time::text AS walkin_close_time,
+        b.cancel_before_minutes,
+        ${SUBSCRIPTION_JSON} AS subscription,
         COUNT(t.ticket_id) FILTER (WHERE t.status_id = 1) AS waiting_count,
         COUNT(t.ticket_id) FILTER (WHERE t.status_id = 2) AS serving_count
       FROM business b
@@ -120,17 +131,19 @@ const BusinessModel = {
     return result.rows;
   },
 
-  create: async (client, { business_name, description, image, is_deposit, deposit_amount, owner_id, category_id, queue_type = 'walkin' }) => {
+  create: async (client, { business_name, description, image, is_deposit, deposit_amount, owner_id, category_id, queue_type = 'walkin', walkin_open_time = null, walkin_close_time = null, cancel_before_minutes = 60 }) => {
     const result = await client.query(
-      `INSERT INTO business (business_name, description, image, is_deposit, deposit_amount, owner_id, category_id, queue_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO business (business_name, description, image, is_deposit, deposit_amount, owner_id, category_id, queue_type,
+                             walkin_open_time, walkin_close_time, cancel_before_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [business_name, description || null, image || '/uploads/business/default-business.jpg', is_deposit, deposit_amount, owner_id, category_id || null, queue_type]
+      [business_name, description || null, image || '/uploads/business/default-business.jpg', is_deposit, deposit_amount, owner_id, category_id || null, queue_type,
+       queue_type === 'walkin' ? walkin_open_time : null, queue_type === 'walkin' ? walkin_close_time : null, cancel_before_minutes]
     );
     return result.rows[0];
   },
 
-  update: async (client, { businessId, business_name, description, image, is_deposit, deposit_amount, category_id, queue_type }) => {
+  update: async (client, { businessId, business_name, description, image, is_deposit, deposit_amount, category_id, queue_type, walkin_open_time, walkin_close_time, cancel_before_minutes }) => {
     const fields = [];
     const values = [];
     let paramIdx = 1;
@@ -158,6 +171,16 @@ const BusinessModel = {
     if (queue_type === 'walkin' || queue_type === 'timeslot') {
       fields.push(`queue_type = $${paramIdx++}`);
       values.push(queue_type);
+      // opening hours only make sense for walk-in shops; null = open all day
+      fields.push(`walkin_open_time = $${paramIdx++}`);
+      values.push(queue_type === 'walkin' ? (walkin_open_time ?? null) : null);
+      fields.push(`walkin_close_time = $${paramIdx++}`);
+      values.push(queue_type === 'walkin' ? (walkin_close_time ?? null) : null);
+    }
+
+    if (cancel_before_minutes !== undefined) {
+      fields.push(`cancel_before_minutes = $${paramIdx++}`);
+      values.push(cancel_before_minutes);
     }
 
     values.push(businessId);
@@ -197,7 +220,7 @@ const BusinessModel = {
       `SELECT start_time, end_time, max_capacity FROM (
          SELECT DISTINCT ON (start_time, end_time) start_time, end_time, max_capacity
            FROM time_slot
-          WHERE business_id = $1 AND date >= ${BKK_TODAY}
+          WHERE business_id = $1 AND NOT is_hidden AND date >= ${BKK_TODAY}
           ORDER BY start_time, end_time, date DESC
        ) s ORDER BY start_time ASC`,
       [businessId]
@@ -205,19 +228,69 @@ const BusinessModel = {
     return result.rows;
   },
 
+  // Replaces the upcoming schedule.
+  //  - slots nobody has booked are deleted
+  //  - slots that already have tickets can't be deleted (tickets point at them), so:
+  //      * same start/end as a new slot  -> kept, capacity follows the new value but never drops below
+  //        the number of people already booked
+  //      * start/end no longer in the schedule -> hidden (is_hidden): still valid for the people who
+  //        booked it, but not shown or bookable any more (so old and new times never overlap on screen)
   updateSchedule: async (client, businessId, slots) => {
+    const starts = slots.map((s) => s.start_time);
+    const ends = slots.map((s) => s.end_time);
+    const caps = slots.map((s) => Number(s.max_capacity) || 1);
+
     await client.query(
-      `DELETE FROM time_slot
-        WHERE business_id = $1
-          AND date >= ${BKK_TODAY}
-          AND timeslot_id NOT IN (
-            SELECT timeslot_id FROM ticket WHERE timeslot_id IS NOT NULL
-          )`,
+      `DELETE FROM time_slot ts
+        WHERE ts.business_id = $1
+          AND ts.date >= ${BKK_TODAY}
+          AND NOT EXISTS (SELECT 1 FROM ticket t WHERE t.timeslot_id = ts.timeslot_id)`,
       [businessId]
     );
 
-    if (slots.length === 0) return [];
+    if (slots.length === 0) {
+      await client.query(
+        `UPDATE time_slot SET is_hidden = TRUE WHERE business_id = $1 AND date >= ${BKK_TODAY}`,
+        [businessId]
+      );
+      return [];
+    }
+
+    // booked slots whose time is not in the new schedule -> hide
+    await client.query(
+      `UPDATE time_slot ts SET is_hidden = TRUE
+        WHERE ts.business_id = $1 AND ts.date >= ${BKK_TODAY}
+          AND NOT EXISTS (
+            SELECT 1 FROM UNNEST($2::time[], $3::time[]) AS s(st, et)
+             WHERE s.st = ts.start_time AND s.et = ts.end_time)`,
+      [businessId, starts, ends]
+    );
+
+    // booked slots whose time matches -> show again, capacity follows the new value (not below booked)
+    await client.query(
+      `UPDATE time_slot ts
+          SET is_hidden = FALSE,
+              max_capacity = GREATEST(s.cap, COALESCE((
+                SELECT SUM(t.pax) FROM ticket t WHERE t.timeslot_id = ts.timeslot_id AND t.status_id <> 4), 0))
+         FROM UNNEST($2::time[], $3::time[], $4::int[]) AS s(st, et, cap)
+        WHERE ts.business_id = $1 AND ts.date >= ${BKK_TODAY}
+          AND ts.start_time = s.st AND ts.end_time = s.et`,
+      [businessId, starts, ends, caps]
+    );
+
+    // everything else is new
     return BusinessModel.addTimeSlots(client, businessId, slots);
+  },
+
+  // True when the submitted slots are exactly the shop's current schedule (so a plain "Save" on a
+  // time-slot shop does not rewrite the schedule at all).
+  isSameSchedule: async (businessId, slots) => {
+    const norm = (t) => { const [h, m, sec = '00'] = String(t).split(':'); return `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${String(sec).padStart(2, '0')}`; };
+    const current = await BusinessModel.getSchedule(businessId);
+    if (current.length !== slots.length) return false;
+    const key = (st, et, cap) => `${norm(st)}|${norm(et)}|${Number(cap)}`;
+    const have = new Set(current.map((r) => key(r.start_time, r.end_time, r.max_capacity)));
+    return slots.every((s) => have.has(key(s.start_time, s.end_time, s.max_capacity)));
   },
 
   // Keeps the rolling 14-day window full. Without this, slots were only ever generated once
@@ -228,13 +301,14 @@ const BusinessModel = {
       `WITH last_day AS (
          SELECT ts2.business_id, MAX(ts2.date) AS d FROM time_slot ts2
            JOIN business bb ON bb.business_id = ts2.business_id AND bb.queue_type = 'timeslot' AND bb.is_active
+          WHERE NOT ts2.is_hidden
           GROUP BY ts2.business_id
        ),
        pattern AS (
          SELECT DISTINCT ts.business_id, ts.start_time, ts.end_time, ts.max_capacity
            FROM time_slot ts
            JOIN last_day l ON l.business_id = ts.business_id AND l.d = ts.date
-          WHERE l.d >= ${BKK_TODAY} - 1
+          WHERE NOT ts.is_hidden
        )
        INSERT INTO time_slot (business_id, date, start_time, end_time, max_capacity)
        SELECT p.business_id, ${BKK_TODAY} + d, p.start_time, p.end_time, p.max_capacity

@@ -94,6 +94,9 @@ exports.createTicket = async (req, res) => {
       if (Number(slot.business_id) !== businessId) {
         throw new BookingError(400, 'This time slot does not belong to the selected shop.');
       }
+      if (slot.is_hidden) {
+        throw new BookingError(409, 'This time slot is no longer offered. Please refresh and choose another time.');
+      }
       if (Number(slot.days_ahead) < 0 || Number(slot.days_ahead) > 13) {
         throw new BookingError(400, 'This time slot is outside the bookable window.');
       }
@@ -113,6 +116,13 @@ exports.createTicket = async (req, res) => {
         throw new BookingError(409, 'You already have a booking in this time slot (overlapping). Please choose another time.');
       }
     } else {
+      // Outside the shop's walk-in hours nobody can join (checked on the server, not just in the UI)
+      if (!business.walkin_open_now) {
+        throw new BookingError(400, `This shop is closed for walk-ins right now. Opens at ${String(business.walkin_open_time).slice(0, 5)}.`);
+      }
+      // FIX: serialize walk-in requests of the same customer for the same shop. Without this, six
+      // simultaneous taps all passed the duplicate check below and created several tickets.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`walkin:${customer_id}:${businessId}`]);
       // One active walk-in ticket per shop per day
       const dup = await client.query(
         `SELECT 1 FROM ticket t JOIN queue q ON q.queue_id = t.queue_id
@@ -208,6 +218,9 @@ exports.cancelTicket = async (req, res) => {
     if (ticket.status_id !== STATUS.WAITING) {
       return res.status(400).json({ success: false, message: 'Only tickets still waiting can be cancelled.' });
     }
+    if (!ticket.can_cancel) {
+      return res.status(400).json({ success: false, message: `The free-cancellation deadline (${ticket.cancel_deadline}) has passed, so this booking can no longer be cancelled.` });
+    }
 
     const updated = await TicketModel.transitionStatus(ticketId, STATUS.WAITING, STATUS.CANCELLED, null, null, 'customer');
     if (!updated) return res.status(409).json({ success: false, message: 'This ticket changed status. Please refresh.' });
@@ -250,7 +263,7 @@ exports.getQueueList = async (req, res) => {
 // Returns the updated ticket on success, or null if it already answered with an error.
 // FIX: it used to return the Express `res` object on errors (truthy), which callers could
 // mistake for a ticket.
-async function transition(req, res, { from, to, notFoundMessage, cancelledBy = null }) {
+async function transition(req, res, { from, to, notFoundMessage, cancelledBy = null, deferSuccess = false }) {
   const ownerId = req.user?.id;
   if (!ownerId) {
     res.status(401).json({ success: false, message: 'Please log in again.' });
@@ -269,7 +282,17 @@ async function transition(req, res, { from, to, notFoundMessage, cancelledBy = n
       res.status(400).json({ success: false, message: notFoundMessage });
       return null;
     }
-    res.json({ success: true, data: ticket });
+    // Checked in = a successful visit: wipe an expired ban history so the next no-show starts over at Warning.
+    if (to === STATUS.SERVING && ticket.customer_id) {
+      try {
+        if (await BlacklistModel.resetAfterSuccessfulVisit(ticket.customer_id)) {
+          console.log(`[Blacklist] Customer ${ticket.customer_id} checked in successfully: ban history reset`);
+        }
+      } catch (e) {
+        console.error('Ban reset error:', e.message);
+      }
+    }
+    if (!deferSuccess) res.json({ success: true, data: ticket });
     return ticket;
   } catch (error) {
     console.error('Update ticket status error:', error);
@@ -357,38 +380,47 @@ exports.noShowTicket = async (req, res) => {
     from: STATUS.WAITING,
     to: STATUS.CANCELLED,
     cancelledBy: 'no_show',
+    deferSuccess: true, // we answer only after the ban is written, so the owner's next screen already shows it
     notFoundMessage: 'Could not mark this ticket as a no-show, or it belongs to a different shop.'
   });
+  if (!ticket) return; // transition() already answered with the error
 
-  if (!ticket || !ticket.customer_id) return;
-
-  // Escalate blacklist tier on no-show: 1 Warning -> 2 Temporary Ban -> 3 Permanent Ban.
-  // FIX: one atomic upsert (needs the UNIQUE index on blacklist.customer_id from init.sql)
-  // instead of read-then-write, which could create duplicate rows for the same customer.
-  try {
-    await pool.query(
-      `INSERT INTO blacklist (elapsed_time, customer_id, tier_id, banned_at)
-       VALUES (0, $1, 1, NOW())
-       ON CONFLICT (customer_id) DO UPDATE
-         SET tier_id = CASE blacklist.tier_id WHEN 1 THEN 2 ELSE 3 END,
-             elapsed_time = 0,
-             banned_at = NOW()`,
-      [ticket.customer_id]
-    );
-    console.log(`[Blacklist] No-show recorded for customer ${ticket.customer_id}`);
-
-    // Tell the customer by email (never fails the request if mail is down)
+  let banned = false;
+  if (ticket.customer_id) {
+    // Escalate blacklist tier on no-show: 1 Warning -> 2 Temporary Ban -> 3 Permanent Ban.
+    // One atomic upsert (needs the UNIQUE index on blacklist.customer_id from init.sql).
     try {
-      const ban = await BlacklistModel.getActiveBan(ticket.customer_id);
-      const cust = await pool.query('SELECT fname, lname, email FROM customer WHERE customer_id = $1', [ticket.customer_id]);
-      if (ban && cust.rows[0]?.email) {
-        const c = cust.rows[0];
-        await mailer.sendBanEmail(c.email, `${c.fname} ${c.lname}`, ban);
-      }
-    } catch (mailError) {
-      console.error('Ban email error:', mailError.message);
+      await pool.query(
+        `INSERT INTO blacklist (elapsed_time, customer_id, tier_id, banned_at)
+         VALUES (0, $1, 1, NOW())
+         ON CONFLICT (customer_id) DO UPDATE
+           SET tier_id = CASE blacklist.tier_id WHEN 1 THEN 2 ELSE 3 END,
+               elapsed_time = 0,
+               banned_at = NOW()`,
+        [ticket.customer_id]
+      );
+      banned = true;
+      console.log(`[Blacklist] No-show recorded for customer ${ticket.customer_id}`);
+    } catch (error) {
+      console.error('Blacklist escalation error:', error);
     }
-  } catch (error) {
-    console.error('Blacklist escalation error:', error);
+  }
+
+  res.json({ success: true, data: ticket });
+
+  // Tell the customer by email afterwards (never affects the response)
+  if (banned) {
+    setImmediate(async () => {
+      try {
+        const ban = await BlacklistModel.getActiveBan(ticket.customer_id);
+        const cust = await pool.query('SELECT fname, lname, email FROM customer WHERE customer_id = $1', [ticket.customer_id]);
+        if (ban && cust.rows[0]?.email) {
+          const c = cust.rows[0];
+          await mailer.sendBanEmail(c.email, `${c.fname} ${c.lname}`, ban);
+        }
+      } catch (mailError) {
+        console.error('Ban email error:', mailError.message);
+      }
+    });
   }
 };

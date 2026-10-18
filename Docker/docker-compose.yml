@@ -35,3 +35,9 @@ services:
       APP_URL: ${APP_URL}
       NODE_ENV: ${NODE_ENV:-development}
       ENABLE_DEV_LOGIN: ${ENABLE_DEV_LOGIN:-true}
+    volumes:
+      # shop photos uploaded by owners live on disk; without this they vanish on every rebuild
+      - uploads_data:/usr/src/app/uploads/business
+
+volumes:
+  uploads_data:

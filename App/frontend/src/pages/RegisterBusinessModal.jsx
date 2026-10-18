@@ -4,6 +4,16 @@ import { api } from '../lib/api';
 let tempIdCounter = 0;
 const nextTempId = () => `slot-${++tempIdCounter}-${Date.now()}`;
 
+// How long before a time-slot starts the customer may still cancel (minutes). 0 = until it starts.
+const CANCEL_OPTIONS = [
+  { value: 1440, label: '24 hours before' },
+  { value: 360, label: '6 hours before' },
+  { value: 120, label: '2 hours before' },
+  { value: 60, label: '1 hour before' },
+  { value: 30, label: '30 minutes before' },
+  { value: 0, label: 'Until the slot starts' }
+];
+
 const emptySlot = () => ({ tempId: nextTempId(), start_time: '', end_time: '', max_capacity: 1 });
 
 export default function RegisterBusinessModal({ ownerId, onClose, onSuccess, editData = null }) {
@@ -13,6 +23,11 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess, edi
   const [depositAmount, setDepositAmount] = useState(editData?.deposit_amount ? String(editData.deposit_amount) : '');
   const [queueType, setQueueType] = useState(editData?.queue_type || 'walkin');
   const [timeSlots, setTimeSlots] = useState(editData?.time_slots?.length ? editData.time_slots.map(s => ({ tempId: nextTempId(), start_time: s.start_time, end_time: s.end_time, max_capacity: s.max_capacity })) : [emptySlot()]);
+  // Walk-in opening hours: "Open all day" or a set window (Bangkok time, same day)
+  const [hoursMode, setHoursMode] = useState(editData?.walkin_open_time && editData?.walkin_close_time ? 'set' : 'all');
+  const [openTime, setOpenTime] = useState(editData?.walkin_open_time ? String(editData.walkin_open_time).slice(0, 5) : '09:00');
+  const [closeTime, setCloseTime] = useState(editData?.walkin_close_time ? String(editData.walkin_close_time).slice(0, 5) : '18:00');
+  const [cancelBefore, setCancelBefore] = useState(editData?.cancel_before_minutes ?? 60);
   const [categoryId, setCategoryId] = useState(editData?.category_id || '');
   const [categories, setCategories] = useState([]);
   const [imageFile, setImageFile] = useState(null);
@@ -66,7 +81,12 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess, edi
 
   const validate = () => {
     if (!businessName.trim()) return 'Please enter a shop name.';
-    if (isDeposit && (!depositAmount || Number(depositAmount) <= 0)) return 'Please enter a valid deposit amount.';
+    if (isDeposit && (!/^\d+(\.\d{1,2})?$/.test(String(depositAmount).trim()) || Number(depositAmount) <= 0)) return 'Please enter a valid deposit amount (more than 0, at most 2 decimals).';
+    if (isDeposit && Number(depositAmount) > 100000) return 'Deposit amount is too large (max 100,000).';
+    if (queueType === 'walkin' && hoursMode === 'set') {
+      if (!openTime || !closeTime) return 'Please set both an opening and a closing time.';
+      if (openTime >= closeTime) return 'Opening time must be before closing time (same day, e.g. 09:00–18:00).';
+    }
     if (queueType === 'timeslot') {
       for (const slot of timeSlots) {
         if (!slot.start_time || !slot.end_time) return 'Please fill in every time slot.';
@@ -92,6 +112,12 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess, edi
       formData.append('deposit_amount', isDeposit ? Number(depositAmount) : 0);
       formData.append('category_id', categoryId || '');
       formData.append('queue_type', queueType);
+      if (queueType === 'walkin') {
+        formData.append('walkin_open_time', hoursMode === 'set' ? openTime : '');
+        formData.append('walkin_close_time', hoursMode === 'set' ? closeTime : '');
+      } else {
+        formData.append('cancel_before_minutes', String(cancelBefore));
+      }
 
       if (queueType === 'timeslot' && timeSlots.length > 0) {
         const slotData = timeSlots.map(({ start_time, end_time, max_capacity }) => ({ start_time, end_time, max_capacity: Number(max_capacity) }));
@@ -287,6 +313,55 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess, edi
             </p>
           </div>
 
+          {queueType === 'walkin' && (
+            <div>
+              <label className="block text-ink-700 dark:text-ink-300 text-sm font-bold mb-2">Walk-in opening hours</label>
+              <div className="flex gap-3">
+                {[['all', 'Open all day'], ['set', 'Set hours']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setHoursMode(key)}
+                    className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
+                      hoursMode === key ? 'bg-brand-700 dark:bg-brand-600 text-white border-brand-700 dark:border-brand-600' : 'bg-white dark:bg-ink-700 text-ink-600 dark:text-ink-300 border-ink-300 dark:border-ink-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {hoursMode === 'set' && (
+                <div className="flex gap-3 mt-3">
+                  <div className="flex-1">
+                    <label className="block text-ink-500 dark:text-ink-400 text-xs mb-1">Opens</label>
+                    <input type="time" className="w-full border border-ink-300 dark:border-ink-600 dark:bg-ink-700 dark:text-white p-2 rounded text-sm" value={openTime} onChange={(e) => setOpenTime(e.target.value)} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-ink-500 dark:text-ink-400 text-xs mb-1">Closes</label>
+                    <input type="time" className="w-full border border-ink-300 dark:border-ink-600 dark:bg-ink-700 dark:text-white p-2 rounded text-sm" value={closeTime} onChange={(e) => setCloseTime(e.target.value)} />
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-ink-400 dark:text-ink-500 mt-2">
+                Thai time. Outside these hours customers see &ldquo;Closed now&rdquo; and can&apos;t take a ticket. Opening and closing must be on the same day (no overnight hours yet). Tickets already taken stay valid after closing time.
+              </p>
+            </div>
+          )}
+
+          {queueType === 'timeslot' && (
+            <div>
+              <label className="block text-ink-700 dark:text-ink-300 text-sm font-bold mb-2">Customers can cancel until</label>
+              <select
+                className="w-full border border-ink-300 dark:border-ink-600 dark:bg-ink-700 dark:text-white p-2 rounded focus:outline-none focus:border-brand-500"
+                value={cancelBefore}
+                onChange={(e) => setCancelBefore(Number(e.target.value))}
+              >
+                {CANCEL_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <p className="text-xs text-ink-400 dark:text-ink-500 mt-2">After this point the booking can&apos;t be cancelled; if the customer doesn&apos;t show up it counts as a no-show.</p>
+            </div>
+          )}
+
           {queueType === 'timeslot' && (
             <div>
               <div className="flex justify-between items-center mb-2">
@@ -330,12 +405,18 @@ export default function RegisterBusinessModal({ ownerId, onClose, onSuccess, edi
             </div>
           )}
 
+          {!editData && (
+            <p className="text-xs rounded-lg px-3 py-2 bg-brand-50 dark:bg-brand-900/20 text-brand-800 dark:text-brand-200">
+              After you register, you pay QFlow a monthly platform fee. Your shop opens to customers once it is paid, and must be renewed every month.
+            </p>
+          )}
+
           <div className="flex gap-3 mt-2">
             <button type="button" onClick={onClose} disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-ink-100 dark:bg-ink-700 text-ink-600 dark:text-ink-200 hover:bg-ink-200 dark:hover:bg-ink-600 transition-colors">
               Cancel
             </button>
             <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-lg font-semibold bg-brand-700 dark:bg-brand-600 text-white hover:bg-brand-800 dark:hover:bg-brand-700 transition-colors disabled:opacity-60">
-              {submitting ? (editData ? 'Saving...' : 'Saving...') : (editData ? 'Save changes' : 'Register shop')}
+              {submitting ? (editData ? 'Saving...' : 'Saving...') : (editData ? 'Save changes' : 'Register & continue to payment')}
             </button>
           </div>
         </form>

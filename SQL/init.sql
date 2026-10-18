@@ -97,6 +97,11 @@ CREATE TABLE business (
     queue_type     VARCHAR(10) NOT NULL DEFAULT 'walkin' CHECK (queue_type IN ('walkin','timeslot')),  -- source of truth (was inferred from time_slot rows)
     is_deposit     BOOLEAN DEFAULT FALSE,
     deposit_amount NUMERIC(10, 2) DEFAULT 0.00,
+    -- Walk-in opening hours (Bangkok time, same day). Both NULL = open all day.
+    walkin_open_time  TIME,
+    walkin_close_time TIME,
+    -- Customers may cancel a time-slot booking until this many minutes before it starts (default 1 hour).
+    cancel_before_minutes INT NOT NULL DEFAULT 60 CHECK (cancel_before_minutes BETWEEN 0 AND 1440),
     owner_id       INT REFERENCES owner(owner_id) ON DELETE CASCADE,
     category_id    INT REFERENCES category(category_id)
 );
@@ -113,6 +118,10 @@ CREATE TABLE subscription (
 CREATE TABLE subscription_payment (
     sub_payment_id  SERIAL PRIMARY KEY,
     amount          NUMERIC(10, 2) NOT NULL,
+    paid_at         TIMESTAMPTZ DEFAULT NOW(),
+    reference       VARCHAR(60),   -- payment reference shown in the (demo) QR code
+    period_start    DATE,          -- the month this payment covers
+    period_end      DATE,
     subscription_id INT REFERENCES subscription(subscription_id) ON DELETE CASCADE
 );
 
@@ -130,6 +139,8 @@ CREATE TABLE time_slot (
     end_time    TIME NOT NULL,
     max_capacity INT NOT NULL DEFAULT 1 CHECK (max_capacity > 0),
     business_id INT REFERENCES business(business_id) ON DELETE CASCADE,
+    -- TRUE = replaced by a newer schedule: kept for people who already booked it, hidden and not bookable
+    is_hidden   BOOLEAN NOT NULL DEFAULT FALSE,
     -- FIX: กัน slot ซ้ำ (updateSchedule เคยสร้างซ้ำกับ slot ที่มีคนจองแล้ว)
     CHECK (end_time > start_time),
     CONSTRAINT uq_time_slot UNIQUE (business_id, date, start_time, end_time)
@@ -146,7 +157,7 @@ CREATE TABLE ticket (
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reminder_sent BOOLEAN NOT NULL DEFAULT FALSE, -- FIX: กันส่งอีเมลเตือนซ้ำ
     cancelled_at  TIMESTAMPTZ,        -- when it was cancelled (owner's cancel history)
-    cancelled_by  VARCHAR(20),        -- 'customer' | 'no_show'
+    cancelled_by  VARCHAR(20),        -- 'customer' | 'no_show' | 'shop_closed' | 'expired'
     CONSTRAINT uq_ticket_queue_number UNIQUE (queue_id, queue_number)
 );
 
@@ -230,7 +241,8 @@ INSERT INTO subscription_plan (plan_name, description, price) VALUES
 INSERT INTO subscription_status (substatus_name) VALUES
 ('Active'),
 ('Expired'),
-('Suspended');
+('Suspended'),
+('Pending');   -- new shop, first monthly fee not paid yet (hidden from customers)
 
 INSERT INTO category (name) VALUES
 ('Barber Shop'),

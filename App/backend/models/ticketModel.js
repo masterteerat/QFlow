@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { SHOP_IS_PAID } = require('./subscriptionModel');
 
 // Status ids, matching ticket_status seed data
 const STATUS = { WAITING: 1, SERVING: 2, COMPLETED: 3, CANCELLED: 4 };
@@ -17,7 +18,7 @@ const TicketModel = {
   // Locks the slot row (inside a transaction) so two people cannot book the last seat at once.
   lockSlot: async (client, timeslotId) => {
     const result = await client.query(
-      `SELECT timeslot_id, business_id, max_capacity, start_time::text AS start_time, end_time::text AS end_time,
+      `SELECT timeslot_id, business_id, max_capacity, is_hidden, start_time::text AS start_time, end_time::text AS end_time,
               date::text AS date,
               (date - ${BKK_TODAY}) AS days_ahead,
               (date = ${BKK_TODAY} AND end_time <= ${BKK_NOW_TIME}) AS already_ended
@@ -57,8 +58,11 @@ const TicketModel = {
   getBusinessForBooking: async (client, businessId) => {
     const result = await client.query(
       `SELECT b.business_id, b.is_deposit, b.deposit_amount,
-              (b.queue_type = 'timeslot') AS has_slots
-         FROM business b WHERE b.business_id = $1 AND b.is_active`,
+              (b.queue_type = 'timeslot') AS has_slots,
+              b.walkin_open_time::text AS walkin_open_time,
+              (b.walkin_open_time IS NULL OR b.walkin_close_time IS NULL
+                OR (${BKK_NOW_TIME} >= b.walkin_open_time AND ${BKK_NOW_TIME} < b.walkin_close_time)) AS walkin_open_now
+         FROM business b WHERE b.business_id = $1 AND b.is_active AND ${SHOP_IS_PAID}`,
       [businessId]
     );
     return result.rows[0];
@@ -145,6 +149,12 @@ const TicketModel = {
          st.status_name,
          COALESCE(p.amount, 0) AS amount_paid,
          ps.status_name AS payment_status,
+         b.cancel_before_minutes,
+         -- Time-slot tickets: last moment the customer may still cancel (Bangkok time). Walk-ins: always cancellable until check-in.
+         CASE WHEN ts.timeslot_id IS NOT NULL
+              THEN to_char((ts.date + ts.start_time) - b.cancel_before_minutes * INTERVAL '1 minute', 'YYYY-MM-DD"T"HH24:MI') END AS cancel_deadline,
+         CASE WHEN ts.timeslot_id IS NULL THEN TRUE
+              ELSE ((NOW() AT TIME ZONE 'Asia/Bangkok') <= (ts.date + ts.start_time) - b.cancel_before_minutes * INTERVAL '1 minute') END AS can_cancel,
          -- Walk-in tickets only: how many walk-in tickets in the same queue are still ahead of this one
          CASE WHEN t.timeslot_id IS NULL AND t.status_id = ${STATUS.WAITING} THEN (
            SELECT COUNT(*) FROM ticket t2
@@ -168,7 +178,16 @@ const TicketModel = {
 
   findOwnedByCustomer: async (ticketId, customerId) => {
     const result = await pool.query(
-      `SELECT ticket_id, status_id FROM ticket WHERE ticket_id = $1 AND customer_id = $2`,
+      `SELECT t.ticket_id, t.status_id,
+              CASE WHEN ts.timeslot_id IS NULL THEN TRUE
+                   ELSE ((NOW() AT TIME ZONE 'Asia/Bangkok') <= (ts.date + ts.start_time) - b.cancel_before_minutes * INTERVAL '1 minute') END AS can_cancel,
+              CASE WHEN ts.timeslot_id IS NOT NULL
+                   THEN to_char((ts.date + ts.start_time) - b.cancel_before_minutes * INTERVAL '1 minute', 'DD/MM/YYYY HH24:MI') END AS cancel_deadline
+         FROM ticket t
+         JOIN queue q ON q.queue_id = t.queue_id
+         JOIN business b ON b.business_id = q.business_id
+         LEFT JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+        WHERE t.ticket_id = $1 AND t.customer_id = $2`,
       [ticketId, customerId]
     );
     return result.rows[0];
@@ -203,9 +222,9 @@ const TicketModel = {
   getBusinessAnalytics: async (businessId) => {
     const totalsQuery = `
       SELECT
-        COUNT(t.ticket_id) AS total_queues,
-        COUNT(t.ticket_id) FILTER (WHERE q.date = ${BKK_TODAY}) AS queues_today,
-        COUNT(t.ticket_id) FILTER (WHERE q.date >= ${BKK_TODAY} - 30 AND q.date < ${BKK_TODAY}) AS queues_past_month,
+        COUNT(t.ticket_id) FILTER (WHERE t.status_id <> 4) AS total_queues,
+        COUNT(t.ticket_id) FILTER (WHERE t.status_id <> 4 AND q.date = ${BKK_TODAY}) AS queues_today,
+        COUNT(t.ticket_id) FILTER (WHERE t.status_id <> 4 AND q.date >= ${BKK_TODAY} - 30 AND q.date < ${BKK_TODAY}) AS queues_past_month,
         COUNT(t.ticket_id) FILTER (WHERE t.status_id = 4) AS total_cancelled
       FROM business b
       LEFT JOIN queue q ON q.business_id = b.business_id
@@ -217,7 +236,7 @@ const TicketModel = {
       SELECT
         to_char(series.date, 'Mon DD') AS date_label,
         to_char(series.date, 'YYYY-MM-DD') AS iso,
-        COUNT(t.ticket_id) AS count
+        COUNT(t.ticket_id) FILTER (WHERE t.status_id <> 4) AS count
       FROM generate_series(${BKK_TODAY}::timestamp - INTERVAL '13 days', ${BKK_TODAY}::timestamp, INTERVAL '1 day') AS series(date)
       LEFT JOIN queue q ON q.date = series.date::date AND q.business_id = $1
       LEFT JOIN ticket t ON t.queue_id = q.queue_id

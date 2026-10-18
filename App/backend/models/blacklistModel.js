@@ -21,6 +21,21 @@ const BlacklistModel = {
       [customerId]
     );
     return rows[0] || null;
+  },
+
+  // Clean slate after a successful visit. A customer whose ban has already run out keeps a blacklist row
+  // on purpose, so the next no-show escalates (Warning -> Temporary -> Permanent). Once they book a shop
+  // and are actually checked in, that history is erased: one slip months later is a Warning again.
+  // An ACTIVE ban is never lifted this way (checking in an older booking must not undo it), and a
+  // permanent ban (tier.time = 0) is never reset. Returns true when a row was removed.
+  resetAfterSuccessfulVisit: async (customerId) => {
+    const { rowCount } = await pool.query(
+      `DELETE FROM blacklist b USING tier t
+        WHERE t.tier_id = b.tier_id AND b.customer_id = $1
+          AND t.time > 0 AND b.banned_at + (t.time * INTERVAL '1 minute') <= NOW()`,
+      [customerId]
+    );
+    return rowCount > 0;
   }
 };
 

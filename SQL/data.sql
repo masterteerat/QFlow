@@ -41,7 +41,11 @@ INSERT INTO subscription (start_date, end_date, business_id, plan_id, substatus_
 ((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 14, 3, 1, 1),
 ((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 4, 2, 1),
 ((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 5, 2, 1),
-((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 6, 2, 1);
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 6, 2, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 7, 2, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 8, 2, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 9, 2, 1),
+((NOW() AT TIME ZONE 'Asia/Bangkok')::date, (NOW() AT TIME ZONE 'Asia/Bangkok')::date + 180, 10, 2, 1);
 
 -- Today's queue row for each business (the app would auto-create these on first
 -- booking anyway via findOrCreateTodayQueue, but they're pre-seeded here so the

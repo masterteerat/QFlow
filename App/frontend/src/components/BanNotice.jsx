@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { getCustomer } from '../lib/auth';
+import useDevLogin from '../lib/useDevLogin';
+import { useToast } from '../context/ToastContext';
 
 function formatLeft(totalSeconds) {
   const s = Math.max(0, totalSeconds);
@@ -17,6 +19,17 @@ export default function BanNotice() {
   const customer = getCustomer();
   const [ban, setBan] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const devMode = useDevLogin(); // TEST ONLY: the "Lift ban" button shows only while Quick Login is enabled
+  const { toast } = useToast();
+  const [lifting, setLifting] = useState(false);
+
+  const liftBan = async () => {
+    setLifting(true);
+    const res = await api.post('/customer/dev-unban');
+    setLifting(false);
+    if (res.success) { setBan(null); toast.success('Ban lifted (test mode)'); }
+    else toast.error(res.message || 'Could not lift the ban');
+  };
 
   // Load now and re-check every minute (the ban may have been lifted or extended)
   useEffect(() => {
@@ -62,12 +75,21 @@ export default function BanNotice() {
               : 'You missed a booked queue. You can book again when the timer ends.'}
           </p>
         </div>
-        {!ban.permanent && (
-          <div className="text-right shrink-0">
-            <p className="text-xs uppercase tracking-wide opacity-80">Time left</p>
-            <p className="text-2xl font-mono font-bold">{formatLeft(secondsLeft)}</p>
-          </div>
-        )}
+        <div className="flex items-center gap-4 shrink-0">
+          {!ban.permanent && (
+            <div className="text-right">
+              <p className="text-xs uppercase tracking-wide opacity-80">Time left</p>
+              <p className="text-2xl font-mono font-bold">{formatLeft(secondsLeft)}</p>
+            </div>
+          )}
+          {/* TEST ONLY - delete this button (and /customer/dev-unban) before going live */}
+          {devMode && (
+            <button type="button" onClick={liftBan} disabled={lifting}
+              className="px-3 py-2 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60">
+              {lifting ? 'Lifting…' : 'Lift ban (test)'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
