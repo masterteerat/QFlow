@@ -1,0 +1,23 @@
+# Place this file at the ROOT of the build context (the folder that `context: ..` points to)
+
+# dependencies and build output (rebuilt inside the image)
+**/node_modules
+**/dist
+
+# secrets: never bake into an image
+**/.env
+**/.env.*
+
+# version control and editor files
+.git
+.gitignore
+.vscode
+.idea
+
+# local uploads must not be baked into the image (they live in the volume)
+App/backend/uploads
+
+# misc
+**/npm-debug.log*
+**/.DS_Store
+*.md

@@ -1,25 +1,31 @@
 # Stage 1: build the React frontend
-# FRONTEND_DIR picks the UI: 'frontend' (original, default) or 'frontend-v2' (redesign).
-#   docker compose build --build-arg FRONTEND_DIR=frontend-v2
-FROM node:20-alpine AS frontend-builder
-ARG FRONTEND_DIR=frontend
+FROM node:22-alpine AS frontend-builder
 WORKDIR /usr/src/frontend
 
-COPY App/${FRONTEND_DIR}/package*.json ./
-RUN npm install
+COPY App/frontend/package*.json ./
+RUN npm ci
 
-COPY App/${FRONTEND_DIR}/ .
+COPY App/frontend/ .
 RUN npm run build
 
 # Stage 2: Express backend, serving the built frontend
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /usr/src/app
 
-COPY App/backend/package*.json ./
-RUN npm install
+# give the non-root 'node' user ownership of the app dir
+RUN chown node:node /usr/src/app
+USER node
 
-COPY App/backend/ .
-COPY --from=frontend-builder /usr/src/frontend/dist ./public
+# production dependencies only (smaller image)
+COPY --chown=node:node App/backend/package*.json ./
+RUN npm ci --omit=dev
+
+COPY --chown=node:node App/backend/ .
+COPY --chown=node:node --from=frontend-builder /usr/src/frontend/dist ./public
+
+# create the uploads dir as 'node' BEFORE the volume is mounted,
+# so the named volume inherits node's ownership and uploads can be written
+RUN mkdir -p uploads/business
 
 EXPOSE 3000
 CMD ["npm", "start"]

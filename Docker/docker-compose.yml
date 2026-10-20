@@ -1,43 +1,48 @@
 services:
   db:
     image: postgres:17
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: qflow1234
-      POSTGRES_DB: qflow_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB}
       TZ: Asia/Bangkok
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "127.0.0.1:5432:5432"
     volumes:
+      - pgdata:/var/lib/postgresql/data
       - ../SQL/init.sql:/docker-entrypoint-initdb.d/01_init.sql
-      # SAMPLE/TEST data only (fake accounts, password Password123). DELETE this line in production.
       - ../SQL/data.sql:/docker-entrypoint-initdb.d/02_data.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   app:
     build:
       context: ..
       dockerfile: Docker/Dockerfile
-      args:
-        # which UI to build: 'frontend' (original) or 'frontend-v2' (redesign)
-        FRONTEND_DIR: ${FRONTEND_DIR:-frontend}
+    restart: unless-stopped
     ports:
       - "3000:3000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       TZ: Asia/Bangkok
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       QR_SECRET: ${QR_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
       APP_URL: ${APP_URL}
-      NODE_ENV: ${NODE_ENV:-development}
-      ENABLE_DEV_LOGIN: ${ENABLE_DEV_LOGIN:-true}
+      NODE_ENV: ${NODE_ENV:-production}
+      ENABLE_DEV_LOGIN: ${ENABLE_DEV_LOGIN:-false}
     volumes:
-      # shop photos uploaded by owners live on disk; without this they vanish on every rebuild
       - uploads_data:/usr/src/app/uploads/business
 
 volumes:
+  pgdata:
   uploads_data:
