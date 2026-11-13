@@ -40,6 +40,9 @@ router.get('/notification-preference', ...customerOnly,
 router.patch('/notification-preference', ...customerOnly,
   requirePermission('ticket', 'read'), auth.updateNotificationPreference);
 
+router.post('/test-email', ...customerOnly,
+  requirePermission('ticket', 'read'), auth.sendTestEmail);
+
 router.get('/unsubscribe', auth.unsubscribe);
 router.get('/ban-status', ...customerOnly, auth.getBanStatus);
 // TEST ONLY (needs ENABLE_DEV_LOGIN=true, never in production): customer lifts their own ban

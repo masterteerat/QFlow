@@ -55,7 +55,7 @@ exports.sendOTP = async (toEmail, otpCode) => {
 };
 
 // ========== NEW: Daily Schedule Email ==========
-exports.sendDailyScheduleEmail = async (toEmail, customerName, tickets, customerId) => {
+exports.sendDailyScheduleEmail = async (toEmail, customerName, tickets, customerId, { test = false } = {}) => {
   const jwt = require('jsonwebtoken');
   const unsubUrl = `${process.env.APP_URL || 'http://localhost:3000'}/api/customer/unsubscribe?token=${customerId ? jwt.sign({ id: customerId, purpose: 'unsubscribe' }, process.env.JWT_SECRET, { expiresIn: '365d' }) : ''}`;
   console.log('[Mailer] sendDailyScheduleEmail called:', { toEmail, customerName, ticketCount: tickets.length });
@@ -98,7 +98,7 @@ exports.sendDailyScheduleEmail = async (toEmail, customerName, tickets, customer
   const mailOptions = {
     from: `"QFlow Daily Schedule" <${process.env.SMTP_USER}>`,
     to: toEmail,
-    subject: `Your QFlow Schedule - ${tickets.length} Upcoming Booking${tickets.length !== 1 ? 's' : ''}`,
+    subject: `${test ? '[TEST] ' : ''}Your QFlow Schedule - ${tickets.length} Upcoming Booking${tickets.length !== 1 ? 's' : ''}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #0f766e; text-align: center; padding: 20px 0;">Your Upcoming QFlow Bookings</h2>
@@ -137,7 +137,7 @@ exports.sendDailyScheduleEmail = async (toEmail, customerName, tickets, customer
 };
 
 // ========== NEW: 1-Hour Queue Reminder Email ==========
-exports.sendQueueReminderEmail = async (toEmail, customerName, ticket, businessName, startTime, hoursBefore = 1) => {
+exports.sendQueueReminderEmail = async (toEmail, customerName, ticket, businessName, startTime, hoursBefore = 1, { test = false } = {}) => {
   const hoursLabel = `${hoursBefore} hour${hoursBefore === 1 ? '' : 's'}`;
   console.log('[Mailer] sendQueueReminderEmail called:', { toEmail, customerName, ticketId: ticket.ticket_id, startTime });
 
@@ -160,7 +160,7 @@ exports.sendQueueReminderEmail = async (toEmail, customerName, ticket, businessN
   const mailOptions = {
     from: `"QFlow Queue Reminder" <${process.env.SMTP_USER}>`,
     to: toEmail,
-    subject: `⏰ Your queue starts in ~${hoursLabel} at ${businessName}`,
+    subject: `${test ? '[TEST] ' : ''}⏰ Your queue starts in ~${hoursLabel} at ${businessName}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; border: 2px solid #0f766e; border-radius: 8px; overflow: hidden;">
         

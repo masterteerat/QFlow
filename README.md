@@ -15,16 +15,12 @@ run their day, POS, scheduling staff, etc. - is out of scope on purpose.
 - Shops can optionally require a deposit before a booking is confirmed.
 
 
-## Two UIs (original + redesign)
+## Frontend
 
-The project ships with two interchangeable frontends that use the same backend and API:
+There is a single React frontend in `App/frontend`: warm "paper & ink" look with an orange accent, mobile tab bar, ticket-stub cards and a booking sheet. It serves both the customer and owner flows against the same backend API.
 
-- `App/frontend` - the original UI (default).
-- `App/frontend-v2` - the redesign: warm "paper & ink" look with an orange accent, mobile tab bar, ticket-stub cards and a booking sheet.
-
-Run the redesign locally: `cd App/frontend-v2 && npm install && npm run dev`.
-Build it into Docker: `FRONTEND_DIR=frontend-v2 docker compose -f Docker/docker-compose.yml up --build`
-(leave `FRONTEND_DIR` unset to keep building the original).
+Run it locally: `cd App/frontend && npm install && npm run dev`.
+Build it into Docker: `docker compose -f Docker/docker-compose.yml up --build`.
 
 ## Stack
 

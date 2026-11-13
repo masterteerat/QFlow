@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { sendOTP } = require('../mailer');
+const mailer = require('../mailer');
 const CustomerModel = require('../models/customerModel');
 const { validateSignupInput, validateProfileInput, normalizeEmail } = require('../utils/validation');
 const { generateOTP, storeOTP, verifyOTP } = require('../utils/otp');
@@ -253,6 +254,94 @@ exports.updateNotificationPreference = async (req, res) => {
   } catch (error) {
     console.error('Update notification preference error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// POST /api/customer/test-email  { type: 'daily' | 'reminder' }
+// Sends the e-mail to the logged-in customer RIGHT NOW so they can see what it looks like,
+// without waiting for the scheduled job. It ignores the on/off switch and the chosen hour, and it
+// does NOT touch daily_email_last_sent / ticket.reminder_sent, so the real scheduled emails are unaffected.
+// Uses the customer's real bookings when they have any, otherwise a clearly-labelled sample.
+const testEmailLastSent = new Map(); // customer_id -> timestamp (10 s cooldown against spamming)
+exports.sendTestEmail = async (req, res) => {
+  const type = req.body?.type;
+  if (type !== 'daily' && type !== 'reminder') {
+    return res.status(400).json({ success: false, message: "type must be 'daily' or 'reminder'." });
+  }
+  const customerId = req.user.id;
+  const last = testEmailLastSent.get(customerId) || 0;
+  if (Date.now() - last < 10000) {
+    return res.status(429).json({ success: false, message: 'Please wait a few seconds before sending another test.' });
+  }
+  testEmailLastSent.set(customerId, Date.now());
+
+  const BKK_TODAY = `(NOW() AT TIME ZONE 'Asia/Bangkok')::date`;
+  const BKK_NOW = `(NOW() AT TIME ZONE 'Asia/Bangkok')`;
+  try {
+    const { rows: [customer] } = await pool.query(
+      'SELECT email, fname, lname, reminder_hours_before FROM customer WHERE customer_id = $1', [customerId]);
+    if (!customer) return res.status(404).json({ success: false, message: 'Customer not found' });
+    const name = `${customer.fname} ${customer.lname}`;
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+    let usedSample = false;
+
+    if (type === 'daily') {
+      const { rows } = await pool.query(`
+        SELECT t.ticket_id, t.queue_number, b.business_name,
+               to_char(COALESCE(ts.date, q.date), 'YYYY-MM-DD') AS date,
+               COALESCE(ts.start_time::text, '-') AS start_time,
+               COALESCE(ts.end_time::text, '-') AS end_time,
+               st.status_name
+        FROM ticket t
+        JOIN queue q ON q.queue_id = t.queue_id
+        JOIN business b ON b.business_id = q.business_id
+        JOIN ticket_status st ON st.status_id = t.status_id
+        LEFT JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+        WHERE t.customer_id = $1
+          AND t.status_id IN (1, 2)
+          AND COALESCE(ts.date, q.date) BETWEEN ${BKK_TODAY} AND ${BKK_TODAY} + 14
+        ORDER BY COALESCE(ts.date, q.date) ASC, ts.start_time ASC
+      `, [customerId]);
+      let tickets = rows;
+      if (tickets.length === 0) {
+        usedSample = true;
+        tickets = [{ ticket_id: 0, queue_number: 'A001', business_name: 'Sample Shop (test data)', date: today, start_time: '10:00:00', end_time: '10:30:00', status_name: 'Waiting' }];
+      }
+      await mailer.sendDailyScheduleEmail(customer.email, name, tickets, customerId, { test: true });
+    } else {
+      const { rows } = await pool.query(`
+        SELECT t.ticket_id, t.queue_number, b.business_name,
+               to_char(ts.date, 'YYYY-MM-DD') AS date,
+               ts.start_time::text AS start_time, ts.end_time::text AS end_time
+        FROM ticket t
+        JOIN time_slot ts ON ts.timeslot_id = t.timeslot_id
+        JOIN queue q ON q.queue_id = t.queue_id
+        JOIN business b ON b.business_id = q.business_id
+        WHERE t.customer_id = $1 AND t.status_id = 1
+          AND (ts.date + ts.start_time) > ${BKK_NOW}
+        ORDER BY ts.date ASC, ts.start_time ASC
+        LIMIT 1
+      `, [customerId]);
+      let ticket = rows[0];
+      if (!ticket) {
+        usedSample = true;
+        ticket = { ticket_id: 0, queue_number: 'A001', business_name: 'Sample Shop (test data)', date: today, start_time: '10:00:00', end_time: '10:30:00' };
+      }
+      await mailer.sendQueueReminderEmail(customer.email, name, ticket, ticket.business_name, ticket.start_time,
+        Number(customer.reminder_hours_before) || 1, { test: true });
+    }
+
+    res.json({
+      success: true,
+      sample: usedSample,
+      message: usedSample
+        ? `Test email sent to ${customer.email} (you have no upcoming bookings, so it uses sample data).`
+        : `Test email sent to ${customer.email}.`
+    });
+  } catch (error) {
+    testEmailLastSent.delete(customerId);
+    console.error('Send test email error:', error);
+    res.status(500).json({ success: false, message: 'Could not send the test email. Check the SMTP settings on the server.' });
   }
 };
 

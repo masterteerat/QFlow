@@ -79,6 +79,7 @@ export default function MySchedule() {
   const [queueOptIn, setQueueOptIn] = useState(false);
   const [reminderHours, setReminderHours] = useState(1);
   const [optInLoading, setOptInLoading] = useState(false);
+  const [testSending, setTestSending] = useState(null); // 'daily' | 'reminder' | null
 
   // One helper for all three settings (daily switch, queue-reminder switch, hours).
   const savePreference = async (changes) => {
@@ -105,6 +106,20 @@ export default function MySchedule() {
   const customer = getCustomer();
   const customerId = customer?.id;
   const { toast } = useToast();
+
+  // Sends the chosen e-mail to the customer immediately (no waiting for the schedule).
+  const sendTestEmail = async (type) => {
+    setTestSending(type);
+    try {
+      const result = await api.post('/customer/test-email', { type });
+      if (result.success) toast.success(result.message || 'Test email sent');
+      else toast.error(result.message || 'Could not send the test email');
+    } catch {
+      toast.error('Could not reach the server.');
+    } finally {
+      setTestSending(null);
+    }
+  };
 
   const fetchTickets = useCallback(async () => {
     if (!customerId) { setErrorMsg('Please log in again.'); setLoading(false); return; }
@@ -280,6 +295,14 @@ export default function MySchedule() {
                   <span className="text-ink-600 dark:text-ink-300">(Bangkok time)</span>
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => sendTestEmail('daily')}
+                disabled={testSending !== null}
+                className="mt-3 ml-8 text-sm font-semibold px-3 py-1.5 rounded-md border border-brand-600 text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                {testSending === 'daily' ? 'Sending...' : 'Send test email now'}
+              </button>
             </div>
 
             {/* 2) Reminder before the queue, with customer-chosen hours */}
@@ -322,6 +345,14 @@ export default function MySchedule() {
                   <span className="text-ink-600 dark:text-ink-300">before</span>
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => sendTestEmail('reminder')}
+                disabled={testSending !== null}
+                className="mt-3 ml-8 text-sm font-semibold px-3 py-1.5 rounded-md border border-brand-600 text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                {testSending === 'reminder' ? 'Sending...' : 'Send test email now'}
+              </button>
             </div>
             {optInLoading && (
               <span className="text-xs text-ink-400 dark:text-ink-500 sm:col-span-2">Updating...</span>
