@@ -40,6 +40,8 @@ const STEPS = [
      FROM business b
     WHERE NOT EXISTS (SELECT 1 FROM subscription s WHERE s.business_id = b.business_id)
       AND EXISTS (SELECT 1 FROM subscription_plan) AND EXISTS (SELECT 1 FROM subscription_status WHERE substatus_name = 'Active')`,
+  // shop names are unique among active shops (skipped with a log line if old data already has duplicates)
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_business_name_active ON business(lower(business_name)) WHERE is_active`,
   // --- ticket / otp ---
   `ALTER TABLE ticket ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN NOT NULL DEFAULT FALSE`,
   `ALTER TABLE ticket ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`,

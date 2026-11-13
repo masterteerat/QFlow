@@ -212,6 +212,7 @@ CREATE INDEX idx_ticket_timeslot ON ticket(timeslot_id);
 CREATE INDEX idx_time_slot_business_date ON time_slot(business_id, date);
 CREATE UNIQUE INDEX idx_customer_email_lower ON customer(lower(email));
 CREATE UNIQUE INDEX idx_owner_email_lower ON owner(lower(email));
+CREATE UNIQUE INDEX idx_business_name_active ON business(lower(business_name)) WHERE is_active;
 
 
 -- =====================================================================

@@ -233,8 +233,8 @@ const BusinessModel = {
   //  - slots that already have tickets can't be deleted (tickets point at them), so:
   //      * same start/end as a new slot  -> kept, capacity follows the new value but never drops below
   //        the number of people already booked
-  //      * start/end no longer in the schedule -> hidden (is_hidden): still valid for the people who
-  //        booked it, but not shown or bookable any more (so old and new times never overlap on screen)
+  //      * start/end no longer in the schedule -> KEPT as is (visible, still in the shop's schedule):
+  //        the owner cannot remove a time that customers have already booked
   updateSchedule: async (client, businessId, slots) => {
     const starts = slots.map((s) => s.start_time);
     const ends = slots.map((s) => s.end_time);
@@ -256,13 +256,15 @@ const BusinessModel = {
       return [];
     }
 
-    // booked slots whose time is not in the new schedule -> hide
+    // slots removed from the schedule that nobody is waiting/being served on (only cancelled or finished
+    // tickets point at them) can't be deleted, so just hide them. Slots with a waiting/serving ticket stay visible.
     await client.query(
       `UPDATE time_slot ts SET is_hidden = TRUE
         WHERE ts.business_id = $1 AND ts.date >= ${BKK_TODAY}
           AND NOT EXISTS (
             SELECT 1 FROM UNNEST($2::time[], $3::time[]) AS s(st, et)
-             WHERE s.st = ts.start_time AND s.et = ts.end_time)`,
+             WHERE s.st = ts.start_time AND s.et = ts.end_time)
+          AND NOT EXISTS (SELECT 1 FROM ticket t WHERE t.timeslot_id = ts.timeslot_id AND t.status_id IN (1, 2))`,
       [businessId, starts, ends]
     );
 

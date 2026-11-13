@@ -725,6 +725,11 @@ export default function CustomerHome() {
                     <div>
                       <p className="text-sm font-bold text-ink-900 dark:text-white">Party size</p>
                       <p className="text-xs text-ink-500 dark:text-ink-400">{v.isWalkin ? 'Walk-in is always one person.' : v.maxPax !== null ? `Up to ${v.maxPax} in this slot` : 'How many people?'}</p>
+                      {!v.isWalkin && v.maxPax !== null && v.currentPax >= v.maxPax && (
+                        <p role="alert" className="text-xs font-bold text-rose-600 dark:text-rose-400 mt-1">
+                          Only {v.maxPax} spot{v.maxPax === 1 ? '' : 's'} left in this slot. You can't add more people.
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <button

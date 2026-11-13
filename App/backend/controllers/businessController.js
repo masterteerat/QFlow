@@ -106,6 +106,18 @@ function validateBusinessFields({ business_name, is_deposit, deposit_amount }) {
   return validateDeposit(is_deposit, deposit_amount);
 }
 
+// Shop names must be unique (case-insensitive) among active shops. excludeId = the shop being edited.
+async function isNameTaken(name, excludeId = null) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM business
+      WHERE is_active AND lower(business_name) = lower($1)
+        AND ($2::int IS NULL OR business_id <> $2) LIMIT 1`,
+    [String(name).trim(), excludeId]
+  );
+  return rows.length > 0;
+}
+const DUPLICATE_NAME_MESSAGE = 'A shop with this name already exists. Please choose another name.';
+
 function parseTimeSlots(raw) {
   if (!raw) return [];
   return JSON.parse(raw); // throws on bad JSON; callers turn that into a 400
@@ -197,6 +209,17 @@ exports.createBusiness = async (req, res) => {
     return res.status(400).json({ success: false, message: validationError });
   }
 
+  try {
+    if (await isNameTaken(business_name)) {
+      discardUpload(req);
+      return res.status(409).json({ success: false, message: DUPLICATE_NAME_MESSAGE });
+    }
+  } catch (error) {
+    discardUpload(req);
+    console.error('Name check error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+
   const image = req.file ? `/uploads/business/${req.file.filename}` : '/uploads/business/default-business.jpg';
 
   let client;
@@ -235,6 +258,7 @@ exports.createBusiness = async (req, res) => {
   } catch (error) {
     await client?.query('ROLLBACK').catch(() => {});
     discardUpload(req);
+    if (error.code === '23505') return res.status(409).json({ success: false, message: DUPLICATE_NAME_MESSAGE });
     console.error('Create business error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   } finally {
@@ -268,6 +292,17 @@ exports.updateBusiness = async (req, res) => {
   if (validationError) {
     discardUpload(req);
     return res.status(400).json({ success: false, message: validationError });
+  }
+
+  try {
+    if (await isNameTaken(business_name, Number(businessId))) {
+      discardUpload(req);
+      return res.status(409).json({ success: false, message: DUPLICATE_NAME_MESSAGE });
+    }
+  } catch (error) {
+    discardUpload(req);
+    console.error('Name check error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 
   // A plain "Save" on a time-slot shop sends the same slots back: don't rewrite the schedule then.
@@ -311,6 +346,7 @@ exports.updateBusiness = async (req, res) => {
   } catch (error) {
     await client?.query('ROLLBACK').catch(() => {});
     discardUpload(req);
+    if (error.code === '23505') return res.status(409).json({ success: false, message: DUPLICATE_NAME_MESSAGE });
     console.error('Update business error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   } finally {
