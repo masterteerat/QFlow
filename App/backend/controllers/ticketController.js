@@ -224,8 +224,8 @@ exports.cancelTicket = async (req, res) => {
 
     const updated = await TicketModel.transitionStatus(ticketId, STATUS.WAITING, STATUS.CANCELLED, null, null, 'customer');
     if (!updated) return res.status(409).json({ success: false, message: 'This ticket changed status. Please refresh.' });
-    // Customer cancelled in time -> deposit goes back (3 = Refunded). No-shows keep the deposit.
-    await pool.query(`UPDATE payment SET status_id = 3 WHERE ticket_id = $1`, [ticketId]);
+    // Deposits are non-refundable: the payment row is left untouched (stays Paid) whether the
+    // customer cancels in time or never shows up.
     res.json({ success: true, message: 'Booking cancelled.', data: updated });
   } catch (error) {
     console.error('Cancel ticket error:', error);

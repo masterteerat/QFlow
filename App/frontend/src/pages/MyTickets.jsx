@@ -211,7 +211,7 @@ export default function MyTickets() {
       <ConfirmModal
         open={cancelId !== null}
         title="Cancel this ticket?"
-        message="Your slot will be released right away."
+        message="Your slot will be released right away. Any deposit you have paid is non-refundable."
         confirmLabel="Yes, cancel ticket"
         loading={cancelling}
         onConfirm={confirmCancel}

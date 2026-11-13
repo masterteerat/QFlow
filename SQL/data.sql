@@ -156,7 +156,7 @@ LEFT JOIN time_slot ts ON ts.business_id = v.bid
     AND ts.date = (NOW() AT TIME ZONE 'Asia/Bangkok')::date
     AND ts.start_time = v.stime;
 
--- Today's cancelled tickets: one customer self-cancellation (deposit refunded)
+-- Today's cancelled tickets: one customer self-cancellation (deposit kept, non-refundable)
 -- and one no-show at a walk-in shop.
 INSERT INTO ticket (queue_number, queue_id, timeslot_id, customer_id, status_id, pax, cancelled_at, cancelled_by) VALUES
 ('A004',
@@ -169,16 +169,13 @@ INSERT INTO ticket (queue_number, queue_id, timeslot_id, customer_id, status_id,
   8, 4, 1, NOW() - interval '20 minutes', 'no_show'); -- Benjaporn never showed up at Khao San Roastery
 
 -- Deposit payments: tickets at deposit shops have their deposit recorded as Paid
--- when the booking is made; self-cancellation then flips it to Refunded,
--- while no-shows keep their deposit.
+-- when the booking is made. Deposits are non-refundable, so cancelled tickets
+-- and no-shows keep their Paid status.
 INSERT INTO payment (ticket_id, amount, status_id)
 SELECT t.ticket_id, b.deposit_amount, 2
 FROM ticket t
 JOIN queue q ON q.queue_id = t.queue_id
 JOIN business b ON b.business_id = q.business_id AND b.is_deposit = TRUE;
-
-UPDATE payment SET status_id = 3
-WHERE ticket_id IN (SELECT ticket_id FROM ticket WHERE status_id = 4);
 
 -- A few customer notifications tied to today's tickets.
 INSERT INTO notification (message, ticket_id, customer_id)
